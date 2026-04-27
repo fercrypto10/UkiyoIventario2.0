@@ -1106,7 +1106,10 @@ tr:hover td { background: var(--bg-elevated); color: var(--text-primary); }
             <div class="page-title">PRODUCTOS</div>
             <div class="page-subtitle">Catálogo e inventario</div>
           </div>
-          <button class="btn btn-primary" onclick="openProductModal()">+ Agregar Producto</button>
+          <div class="page-actions">
+            <button class="btn btn-ghost btn-sm" onclick="testDelete()" id="testDeleteBtn">🔍 Test Delete</button>
+            <button class="btn btn-primary" onclick="openProductModal()">+ Agregar Producto</button>
+          </div>
         </div>
         <div class="filter-bar">
           <div class="search-wrap">
@@ -1663,6 +1666,7 @@ function renderProductos() {
       stockDisplay = `${stockBadge}<div style="font-size:0.7rem;color:var(--text-dim);margin-top:4px;font-family:var(--font-mono)">${tallasStr}</div>`;
     }
 
+    const pidx = state.products.findIndex(x => x.id === p.id);
     return `<tr>
       <td class="td-name">${esc(p.nombre)}</td>
       <td><span class="badge badge-blue">${esc(p.categoria)}</span></td>
@@ -1673,8 +1677,8 @@ function renderProductos() {
       <td>${stockDisplay}</td>
       <td>
         <div class="td-actions">
-          <button class="btn btn-ghost btn-sm btn-icon" title="Editar" data-id="${p.id}" onclick="openProductModal(this.dataset.id)">✏️</button>
-          <button class="btn btn-danger btn-sm btn-icon" title="Eliminar" data-id="${p.id}" data-nombre="${esc(p.nombre)}" onclick="confirmDelete('product',this.dataset.id,this.dataset.nombre)">🗑</button>
+          <button class="btn btn-ghost btn-sm btn-icon" title="Editar" onclick="openProductModal(state.products[${pidx}].id)">✏️</button>
+          <button class="btn btn-danger btn-sm btn-icon" title="Eliminar" onclick="deleteProductById(state.products[${pidx}].id, state.products[${pidx}].nombre)">🗑</button>
         </div>
       </td>
     </tr>`;
@@ -2206,6 +2210,48 @@ function renderCategoryFilters() {
 // ============================================================
 // DELETE CONFIRM
 // ============================================================
+async function testDelete() {
+  // Shows first product ID and tries to delete it — for debugging only
+  if (state.products.length === 0) { toast('No hay productos cargados', 'error'); return; }
+  const p = state.products[0];
+  const confirmed = confirm('TEST: Intentar eliminar "' + p.nombre + '" con ID "' + p.id + '"?');
+  if (!confirmed) return;
+  showLoading();
+  try {
+    const res = await api({ action: 'deleteProduct', id: String(p.id) });
+    alert('Respuesta del servidor:\n' + JSON.stringify(res, null, 2));
+    if (res.success) await loadAll();
+  } catch(e) {
+    alert('Error: ' + e.message);
+  } finally { hideLoading(); }
+}
+
+function deleteProductById(id, nombre) {
+  // Direct delete with explicit id — bypasses any dataset/template issues
+  document.getElementById('confirmMsg').textContent = '¿Eliminar "' + nombre + '"? Esta acción no se puede deshacer.';
+  const btn = document.getElementById('confirmBtn');
+  btn.onclick = async () => {
+    closeModal('modalConfirm');
+    showLoading();
+    try {
+      console.log('Eliminando producto ID:', id, 'tipo:', typeof id);
+      const res = await api({ action: 'deleteProduct', id: String(id) });
+      console.log('Respuesta delete:', JSON.stringify(res));
+      if (res && res.success) {
+        toast('Producto eliminado ✓', 'success');
+        await loadAll();
+      } else {
+        toast('Error: ' + (res?.error || 'sin respuesta'), 'error');
+      }
+    } catch(e) {
+      toast('Error: ' + e.message, 'error');
+    } finally {
+      hideLoading();
+    }
+  };
+  document.getElementById('modalConfirm').classList.add('open');
+}
+
 function confirmDelete(type, id, label) {
   document.getElementById('confirmMsg').textContent = `¿Estás seguro que quieres eliminar "${label}"? Esta acción no se puede deshacer.`;
   const btn = document.getElementById('confirmBtn');
