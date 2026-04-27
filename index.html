@@ -938,21 +938,36 @@ tr:hover td { background: var(--bg-elevated); color: var(--text-primary); }
             <div class="page-title">DASHBOARD</div>
             <div class="page-subtitle" id="dashDate">—</div>
           </div>
-          <button class="btn btn-ghost" onclick="loadAll()">↺ Actualizar</button>
+          <div class="page-actions">
+            <span id="lastSyncLabel" style="font-size:0.72rem;color:var(--text-dim);align-self:center"></span>
+            <button class="btn btn-ghost" id="syncBtn" onclick="syncData()">↺ Sincronizar</button>
+          </div>
         </div>
 
         <div class="stats-grid" id="statsGrid">
           <div class="stat-card blue">
-            <div class="stat-label">Ventas Hoy</div>
-            <div class="stat-value mono" id="statVentasHoy">$0.00</div>
-            <div class="stat-sub" id="statVentasHoyMeta">Meta: $0.00</div>
-            <div class="stat-progress"><div class="stat-progress-bar" id="progDiario" style="width:0%"></div></div>
+            <div class="stat-label">Meta Diaria</div>
+            <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:4px">
+              <div class="stat-value mono" id="statVentasHoy">$0.00</div>
+              <div style="font-size:0.8rem;color:var(--text-dim)">de <span id="metaDiariaLabel">$0.00</span></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+              <span style="font-size:0.75rem;color:var(--text-secondary)" id="statVentasHoyMeta">0% completado</span>
+              <span style="font-size:0.75rem;color:var(--text-dim)" id="statFaltaDiario">Falta $0.00</span>
+            </div>
+            <div class="stat-progress" style="height:6px"><div class="stat-progress-bar" id="progDiario" style="width:0%"></div></div>
           </div>
           <div class="stat-card green">
-            <div class="stat-label">Ventas del Mes</div>
-            <div class="stat-value mono" id="statVentasMes">$0.00</div>
-            <div class="stat-sub" id="statVentasMesMeta">Meta: $0.00</div>
-            <div class="stat-progress"><div class="stat-progress-bar" id="progMensual" style="width:0%"></div></div>
+            <div class="stat-label">Meta Mensual</div>
+            <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:4px">
+              <div class="stat-value mono" id="statVentasMes">$0.00</div>
+              <div style="font-size:0.8rem;color:var(--text-dim)">de <span id="metaMensualLabel">$0.00</span></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+              <span style="font-size:0.75rem;color:var(--text-secondary)" id="statVentasMesMeta">0% completado</span>
+              <span style="font-size:0.75rem;color:var(--text-dim)" id="statFaltaMensual">Falta $0.00</span>
+            </div>
+            <div class="stat-progress" style="height:6px"><div class="stat-progress-bar" id="progMensual" style="width:0%"></div></div>
           </div>
           <div class="stat-card amber">
             <div class="stat-label">Ganancia Hoy</div>
@@ -1237,7 +1252,7 @@ tr:hover td { background: var(--bg-elevated); color: var(--text-primary); }
         </div>
         <div class="form-group">
           <label class="form-label">Precio Venta (USD)</label>
-          <input type="number" class="form-input" id="prodPrecio" placeholder="0.00" step="0.01" oninput="calcGanancia()">
+          <input type="number" class="form-input" id="prodPrecio" placeholder="0.00" step="0.01" oninput="calcGanancia(true)">
         </div>
       </div>
       <div id="prodGananciaInfo" style="margin-bottom:16px;display:none">
@@ -1335,30 +1350,49 @@ let state = {
 };
 
 // ============================================================
-// LOGIN
+// LOGIN — con sesión persistente via sessionStorage
 // ============================================================
 function doLogin() {
   const u = document.getElementById('loginUser').value.trim();
   const p = document.getElementById('loginPass').value;
   const match = CREDENTIALS.find(c => c.user === u && c.pass === p);
   if (match) {
-    state.currentUser = match;
-    document.getElementById('loginScreen').style.display = 'none';
-    document.getElementById('app').style.display = 'block';
-    document.getElementById('userName').textContent = match.name;
-    document.getElementById('userAvatar').textContent = match.name.charAt(0).toUpperCase();
-    updateDashDate();
-    loadAll();
+    sessionStorage.setItem('ukiyo_user', JSON.stringify(match));
+    startSession(match);
   } else {
     document.getElementById('loginError').textContent = 'Usuario o contraseña incorrectos';
     document.getElementById('loginPass').value = '';
   }
 }
 
+function startSession(match) {
+  state.currentUser = match;
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('userName').textContent = match.name;
+  document.getElementById('userAvatar').textContent = match.name.charAt(0).toUpperCase();
+  updateDashDate();
+  loadAll();
+}
+
+function checkSession() {
+  try {
+    const saved = sessionStorage.getItem('ukiyo_user');
+    if (saved) {
+      const match = JSON.parse(saved);
+      // Verify still valid
+      const valid = CREDENTIALS.find(c => c.user === match.user && c.pass === match.pass);
+      if (valid) { startSession(valid); return true; }
+    }
+  } catch(e) {}
+  return false;
+}
+
 document.getElementById('loginPass').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 document.getElementById('loginUser').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 
 function doLogout() {
+  sessionStorage.removeItem('ukiyo_user');
   document.getElementById('loginScreen').style.display = 'flex';
   document.getElementById('app').style.display = 'none';
   document.getElementById('loginUser').value = '';
@@ -1491,13 +1525,24 @@ function renderDashboard() {
     return parseInt(p.stock) <= min;
   });
 
+  const pctDiario = metaDiaria > 0 ? Math.min(100, (totalHoy/metaDiaria)*100) : 0;
+  const pctMensual = metaMensual > 0 ? Math.min(100, (totalMes/metaMensual)*100) : 0;
+  const faltaDiario = Math.max(0, metaDiaria - totalHoy);
+  const faltaMensual = Math.max(0, metaMensual - totalMes);
+
   document.getElementById('statVentasHoy').textContent = fmt(totalHoy);
-  document.getElementById('statVentasHoyMeta').textContent = `Meta: ${fmt(metaDiaria)} — ${Math.round((totalHoy/metaDiaria)*100)}%`;
-  document.getElementById('progDiario').style.width = Math.min(100,(totalHoy/metaDiaria)*100) + '%';
+  document.getElementById('metaDiariaLabel').textContent = fmt(metaDiaria);
+  document.getElementById('statVentasHoyMeta').textContent = `${pctDiario.toFixed(1)}% completado`;
+  document.getElementById('statFaltaDiario').textContent = faltaDiario > 0 ? `Falta ${fmt(faltaDiario)}` : '✓ Meta alcanzada';
+  document.getElementById('progDiario').style.width = pctDiario + '%';
+  document.getElementById('progDiario').style.background = pctDiario >= 100 ? 'var(--green-main)' : 'var(--blue-main)';
 
   document.getElementById('statVentasMes').textContent = fmt(totalMes);
-  document.getElementById('statVentasMesMeta').textContent = `Meta: ${fmt(metaMensual)} — ${Math.round((totalMes/metaMensual)*100)}%`;
-  document.getElementById('progMensual').style.width = Math.min(100,(totalMes/metaMensual)*100) + '%';
+  document.getElementById('metaMensualLabel').textContent = fmt(metaMensual);
+  document.getElementById('statVentasMesMeta').textContent = `${pctMensual.toFixed(1)}% completado`;
+  document.getElementById('statFaltaMensual').textContent = faltaMensual > 0 ? `Falta ${fmt(faltaMensual)}` : '✓ Meta alcanzada';
+  document.getElementById('progMensual').style.width = pctMensual + '%';
+  document.getElementById('progMensual').style.background = pctMensual >= 100 ? 'var(--green-main)' : 'var(--green-main)';
 
   document.getElementById('statGananciaHoy').textContent = fmt(gananciaHoy);
   document.getElementById('statMargenHoy').textContent = `Margen: ${margenHoy}%`;
@@ -1705,24 +1750,31 @@ function showTallasInput(tallasData) {
 }
 
 function calcPrecioSugerido() {
+  // Called when costo or % cambia -> actualiza precio
   const costo = parseFloat(document.getElementById('prodCosto').value) || 0;
   const pct = parseFloat(document.getElementById('prodPct').value) || 0;
   if (costo > 0 && pct > 0) {
     const precio = costo * (1 + pct/100);
     document.getElementById('prodPrecio').value = precio.toFixed(2);
   }
-  calcGanancia();
+  calcGanancia(false);
 }
 
-function calcGanancia() {
+function calcGanancia(updatePct = true) {
+  // Called when precio cambia -> actualiza % de ganancia
   const costo = parseFloat(document.getElementById('prodCosto').value) || 0;
   const precio = parseFloat(document.getElementById('prodPrecio').value) || 0;
   if (costo > 0 && precio > 0) {
     const ganancia = precio - costo;
-    const margen = ((ganancia/costo)*100).toFixed(1);
+    const pct = ((ganancia/costo)*100);
+    if (updatePct) {
+      document.getElementById('prodPct').value = pct.toFixed(1);
+    }
     document.getElementById('prodGananciaVal').textContent = fmt(ganancia);
-    document.getElementById('prodMargenVal').textContent = margen + '%';
+    document.getElementById('prodMargenVal').textContent = pct.toFixed(1) + '%';
     document.getElementById('prodGananciaInfo').style.display = 'block';
+  } else {
+    document.getElementById('prodGananciaInfo').style.display = 'none';
   }
 }
 
@@ -2130,6 +2182,11 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
   });
 });
 
+// Check for existing session on page load
+window.addEventListener('DOMContentLoaded', () => {
+  checkSession();
+});
+
 // ============================================================
 // LOADING
 // ============================================================
@@ -2155,6 +2212,28 @@ function toast(msg, type = 'info') {
   document.getElementById('toastContainer').appendChild(t);
   setTimeout(() => t.remove(), 3500);
 }
+
+// ============================================================
+// SYNC & AUTO-REFRESH
+// ============================================================
+async function syncData() {
+  const btn = document.getElementById('syncBtn');
+  if (btn) { btn.textContent = '↻ Sincronizando...'; btn.disabled = true; }
+  try {
+    await loadAll();
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('es-SV', { hour: '2-digit', minute: '2-digit' });
+    const el = document.getElementById('lastSyncLabel');
+    if (el) el.textContent = `Última sync: ${timeStr}`;
+  } finally {
+    if (btn) { btn.textContent = '↺ Sincronizar'; btn.disabled = false; }
+  }
+}
+
+// Auto-refresh cada 5 minutos si la app está abierta
+setInterval(() => {
+  if (state.loaded && state.currentUser) syncData();
+}, 5 * 60 * 1000);
 
 // ============================================================
 // REPAIR DB
