@@ -1189,7 +1189,8 @@ tr:hover td { background: var(--bg-elevated); color: var(--text-primary); }
           </div>
         </div>
 
-        <div style="display:flex;justify-content:flex-end;margin-top:20px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:20px">
+          <button class="btn btn-ghost" onclick="repairDB()" title="Repara los encabezados del Google Sheet si los datos no aparecen">🔧 Reparar Base de Datos</button>
           <button class="btn btn-primary" onclick="saveConfig()">💾 Guardar Configuración</button>
         </div>
       </div>
@@ -2153,6 +2154,23 @@ function toast(msg, type = 'info') {
   t.textContent = msg;
   document.getElementById('toastContainer').appendChild(t);
   setTimeout(() => t.remove(), 3500);
+}
+
+// ============================================================
+// REPAIR DB
+// ============================================================
+async function repairDB() {
+  if (!confirm('Esto reparará los encabezados del Google Sheet. ¿Continuar?')) return;
+  showLoading();
+  try {
+    await api({ action: 'repair' });
+    toast('Base de datos reparada ✓ Recargando...', 'success');
+    setTimeout(() => loadAll(), 1500);
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
+  } finally {
+    hideLoading();
+  }
 }
 
 // ============================================================
