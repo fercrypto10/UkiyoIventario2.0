@@ -1673,8 +1673,8 @@ function renderProductos() {
       <td>${stockDisplay}</td>
       <td>
         <div class="td-actions">
-          <button class="btn btn-ghost btn-sm btn-icon" title="Editar" onclick="openProductModal('${p.id}')">✏️</button>
-          <button class="btn btn-danger btn-sm btn-icon" title="Eliminar" onclick="confirmDelete('product','${p.id}','${esc(p.nombre)}')">🗑</button>
+          <button class="btn btn-ghost btn-sm btn-icon" title="Editar" data-id="${p.id}" onclick="openProductModal(this.dataset.id)">✏️</button>
+          <button class="btn btn-danger btn-sm btn-icon" title="Eliminar" data-id="${p.id}" data-nombre="${esc(p.nombre)}" onclick="confirmDelete('product',this.dataset.id,this.dataset.nombre)">🗑</button>
         </div>
       </td>
     </tr>`;
@@ -1871,6 +1871,12 @@ function addToCart(prodId) {
     return;
   }
 
+  const available = parseInt(p.stock) || 0;
+  const alreadyInCart = cart.filter(i => i.producto_id === prodId && !i.talla).reduce((a,i) => a + i.cantidad, 0);
+  if (alreadyInCart >= available) {
+    toast(`Stock insuficiente — solo ${available} unidad(es) disponibles`, 'error');
+    return;
+  }
   const existing = cart.find(i => i.producto_id === prodId && !i.talla);
   if (existing) {
     existing.cantidad++;
@@ -1903,6 +1909,12 @@ function openTallaModal(p) {
 function addToCartWithTalla(prodId, talla) {
   const p = state.products.find(x => x.id === prodId);
   if (!p) return;
+  const available = parseInt(p.tallas?.[talla]) || 0;
+  const alreadyInCart = cart.filter(i => i.producto_id === prodId && i.talla === talla).reduce((a,i) => a + i.cantidad, 0);
+  if (alreadyInCart >= available) {
+    toast(`Stock insuficiente — solo ${available} unidad(es) disponibles en talla ${talla}`, 'error');
+    return;
+  }
   const existing = cart.find(i => i.producto_id === prodId && i.talla === talla);
   if (existing) {
     existing.cantidad++;
@@ -1949,7 +1961,26 @@ function renderCart() {
 }
 
 function changeQty(idx, delta) {
-  cart[idx].cantidad = Math.max(1, cart[idx].cantidad + delta);
+  const item = cart[idx];
+  const newQty = item.cantidad + delta;
+  if (newQty < 1) return;
+  // Validate against available stock
+  const p = state.products.find(x => x.id === item.producto_id);
+  if (p && delta > 0) {
+    let available;
+    if (item.talla && p.tallas && typeof p.tallas === 'object') {
+      available = parseInt(p.tallas[item.talla]) || 0;
+    } else {
+      available = parseInt(p.stock) || 0;
+    }
+    // Count already in cart for this product+talla
+    const alreadyInCart = cart.filter((ci, i) => i !== idx && ci.producto_id === item.producto_id && ci.talla === item.talla).reduce((a,ci) => a + ci.cantidad, 0);
+    if (newQty + alreadyInCart > available) {
+      toast(`Stock insuficiente — solo ${available} unidades disponibles${item.talla ? ' talla ' + item.talla : ''}`, 'error');
+      return;
+    }
+  }
+  cart[idx].cantidad = newQty;
   renderCart();
 }
 function removeFromCart(idx) {
@@ -1963,6 +1994,22 @@ function clearCart() {
 
 async function confirmSale() {
   if (cart.length === 0) { toast('El carrito está vacío', 'error'); return; }
+
+  // Final stock validation before confirming
+  for (const item of cart) {
+    const p = state.products.find(x => x.id === item.producto_id);
+    if (!p) { toast(`Producto no encontrado: ${item.nombre}`, 'error'); return; }
+    let available;
+    if (item.talla && p.tallas && typeof p.tallas === 'object') {
+      available = parseInt(p.tallas[item.talla]) || 0;
+    } else {
+      available = parseInt(p.stock) || 0;
+    }
+    if (item.cantidad > available) {
+      toast(`❌ Stock insuficiente: "${item.nombre}" — disponible: ${available}, en carrito: ${item.cantidad}`, 'error');
+      return;
+    }
+  }
 
   const data = {
     action: 'recordSale',
