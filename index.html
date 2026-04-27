@@ -1656,7 +1656,7 @@ function openProductModal(id) {
 
     // Tallas
     const cat = state.categories.find(c => c.nombre === p.categoria);
-    if (cat && cat.tiene_tallas === 'true') {
+    if (cat && String(cat.tiene_tallas).toLowerCase() === 'true') {
       showTallasInput(p.tallas || {});
     } else {
       document.getElementById('stockSimple').style.display = 'grid';
@@ -1683,7 +1683,7 @@ function openProductModal(id) {
 
 function checkTallas() {
   const cat = state.categories.find(c => c.nombre === document.getElementById('prodCategoria').value);
-  if (cat && cat.tiene_tallas === 'true') {
+  if (cat && String(cat.tiene_tallas).toLowerCase() === 'true') {
     showTallasInput({});
   } else {
     document.getElementById('stockSimple').style.display = 'grid';
@@ -1734,7 +1734,7 @@ async function saveProduct() {
   let tallas = null;
   let stock = parseInt(document.getElementById('prodStock').value) || 0;
 
-  if (cat && cat.tiene_tallas === 'true') {
+  if (cat && String(cat.tiene_tallas).toLowerCase() === 'true') {
     tallas = {};
     let totalStock = 0;
     document.querySelectorAll('#tallasGrid .talla-input').forEach(inp => {
@@ -1813,7 +1813,7 @@ function addToCart(prodId) {
   if (!p) return;
   const cat = state.categories.find(c => c.nombre === p.categoria);
 
-  if (cat && cat.tiene_tallas === 'true' && p.tallas && typeof p.tallas === 'object') {
+  if (cat && String(cat.tiene_tallas).toLowerCase() === 'true' && p.tallas && typeof p.tallas === 'object') {
     openTallaModal(p);
     return;
   }
