@@ -11,36 +11,36 @@
    VARIABLES & RESET
 ============================================================ */
 :root {
-  --bg-base:      #09090f;
-  --bg-card:      #0f0f1a;
-  --bg-elevated:  #141420;
-  --bg-input:     #1a1a2a;
-  --border:       #1e1e30;
-  --border-light: #252538;
+  --bg-base:      #111118;
+  --bg-card:      #1a1a24;
+  --bg-elevated:  #22222e;
+  --bg-input:     #272733;
+  --border:       #2e2e42;
+  --border-light: #383850;
 
-  --blue-dim:     #1a2a4a;
-  --blue-mid:     #1e3a6e;
-  --blue-main:    #2563a8;
-  --blue-bright:  #3b82c4;
-  --blue-glow:    rgba(37,99,168,0.18);
+  --blue-dim:     #1e3358;
+  --blue-mid:     #234480;
+  --blue-main:    #3b7dd8;
+  --blue-bright:  #5b9cf0;
+  --blue-glow:    rgba(59,125,216,0.2);
 
-  --red-dim:      #3a1010;
-  --red-mid:      #6e1a1a;
-  --red-main:     #b91c1c;
-  --red-bright:   #dc2626;
-  --red-glow:     rgba(185,28,28,0.18);
+  --red-dim:      #3d1414;
+  --red-mid:      #7a1f1f;
+  --red-main:     #d42b2b;
+  --red-bright:   #f04040;
+  --red-glow:     rgba(212,43,43,0.2);
 
-  --green-dim:    #0d2a1a;
-  --green-main:   #16a34a;
-  --green-bright: #22c55e;
+  --green-dim:    #0f3020;
+  --green-main:   #1db854;
+  --green-bright: #2edb6a;
 
-  --amber-dim:    #2a1f0a;
-  --amber-main:   #d97706;
-  --amber-bright: #f59e0b;
+  --amber-dim:    #302410;
+  --amber-main:   #e08c10;
+  --amber-bright: #f5aa20;
 
-  --text-primary:   #e8e8f0;
-  --text-secondary: #8888a8;
-  --text-dim:       #4a4a68;
+  --text-primary:   #f0f0fa;
+  --text-secondary: #a0a0c0;
+  --text-dim:       #606080;
 
   --font-display: 'Bebas Neue', sans-serif;
   --font-body:    'DM Sans', sans-serif;
@@ -1203,34 +1203,6 @@ tr:hover td { background: var(--bg-elevated); color: var(--text-primary); }
           </div>
         </div>
 
-        <div class="config-section">
-          <div class="config-section-title">👤 USUARIOS</div>
-          <div class="card" style="padding:16px;margin-bottom:0">
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:10px;margin-bottom:14px;align-items:end">
-              <div class="form-group">
-                <label class="form-label">Nombre</label>
-                <input type="text" class="form-input" id="newUserName" placeholder="ej. Santiago">
-              </div>
-              <div class="form-group">
-                <label class="form-label">Usuario</label>
-                <input type="text" class="form-input" id="newUserUser" placeholder="ej. Ukiyo1">
-              </div>
-              <div class="form-group">
-                <label class="form-label">Contraseña</label>
-                <input type="text" class="form-input" id="newUserPass" placeholder="ej. Pass123@">
-              </div>
-              <button class="btn btn-primary" onclick="addUser()">+ Agregar</button>
-              <button class="btn btn-ghost" onclick="testUserSync()">🔍 Test Sync</button>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <thead><tr><th>Nombre</th><th>Usuario</th><th>Contraseña</th><th></th></tr></thead>
-                <tbody id="usersTbody"></tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:20px;flex-wrap:wrap;gap:10px">
           <div style="display:flex;gap:10px;flex-wrap:wrap">
             <button class="btn btn-ghost" onclick="repairDB()" title="Repara los encabezados del Google Sheet si los datos no aparecen">🔧 Reparar Base de Datos</button>
@@ -1359,53 +1331,12 @@ tr:hover td { background: var(--bg-elevated); color: var(--text-primary); }
 // ============================================================
 const API_URL = 'https://script.google.com/macros/s/AKfycbzg5t0JkV7smBHYYvdC2bB_JHbs0_9lV-vZLqwMtcCLWpl1jB8KMy437QRUPouMMLGW2A/exec';
 
-// Credenciales — sincronizadas con Google Sheet + cache local
-const DEFAULT_CREDENTIALS = [
+const CREDENTIALS = [
   { user: 'Ukiyo1', pass: 'Santiago72@', name: 'Santiago', role: 'Admin' },
   { user: 'Pamela1', pass: 'Pamela72@', name: 'Pamela', role: 'Admin' }
 ];
 
-function getCredentials() {
-  try {
-    const saved = localStorage.getItem('ukiyo_credentials');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (parsed && parsed.length > 0) return parsed;
-    }
-  } catch(e) {}
-  return DEFAULT_CREDENTIALS;
-}
-
-function saveCredentials(creds) {
-  localStorage.setItem('ukiyo_credentials', JSON.stringify(creds));
-}
-
-async function syncUsersFromSheet() {
-  try {
-    const res = await api({ action: 'getUsers' });
-    if (res && res.success && res.data && res.data.length > 0) {
-      saveCredentials(res.data);
-      return res.data;
-    }
-  } catch(e) { console.log('Users sync skipped:', e.message); }
-  return getCredentials();
-}
-
-async function pushUsersToSheet(creds) {
-  try {
-    // Send each user as individual param (u0, u1...) to avoid URL length limits
-    const params = { action: 'saveUsers' };
-    creds.forEach((u, i) => {
-      params['u' + i] = JSON.stringify({ user: u.user, pass: u.pass, name: u.name, role: u.role || 'Admin' });
-    });
-    const res = await api(params);
-    if (res && res.success) {
-      console.log('Users synced to Sheet:', res.message);
-    } else {
-      console.warn('Users sync warning:', res?.error);
-    }
-  } catch(e) { console.log('Users push failed:', e.message); }
-}
+function getCredentials() { return CREDENTIALS; }
 
 const TALLAS_ORDER = ['10/12','XS','S','M','L','XL','XXL','XXXL'];
 
@@ -1428,7 +1359,7 @@ let state = {
 function doLogin() {
   const u = document.getElementById('loginUser').value.trim();
   const p = document.getElementById('loginPass').value;
-  const match = getCredentials().find(c => c.user === u && c.pass === p);
+  const match = CREDENTIALS.find(c => c.user === u && c.pass === p);
   if (match) {
     sessionStorage.setItem('ukiyo_user', JSON.stringify(match));
     startSession(match);
@@ -1454,7 +1385,7 @@ function checkSession() {
     if (saved) {
       const match = JSON.parse(saved);
       // Verify still valid
-      const valid = getCredentials().find(c => c.user === match.user && c.pass === match.pass);
+      const valid = CREDENTIALS.find(c => c.user === match.user && c.pass === match.pass);
       if (valid) { startSession(valid); return true; }
     }
   } catch(e) {}
@@ -1532,8 +1463,6 @@ async function loadAll() {
     state.config = data.config || {};
     state.categories = data.categories || [];
     state.loaded = true;
-    // Sync users from Sheet
-    await syncUsersFromSheet();
 
     renderAll();
     toast('Datos cargados', 'success');
