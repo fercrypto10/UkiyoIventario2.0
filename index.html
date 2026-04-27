@@ -1206,6 +1206,7 @@ tr:hover td { background: var(--bg-elevated); color: var(--text-primary); }
 
         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:20px">
           <button class="btn btn-ghost" onclick="repairDB()" title="Repara los encabezados del Google Sheet si los datos no aparecen">🔧 Reparar Base de Datos</button>
+          <button class="btn btn-ghost" onclick="reactivarProductos()" title="Reactiva productos que aparecen como inactivos en el Sheet">♻️ Reactivar Productos</button>
           <button class="btn btn-primary" onclick="saveConfig()">💾 Guardar Configuración</button>
         </div>
       </div>
@@ -2345,6 +2346,20 @@ setInterval(() => {
 // ============================================================
 // REPAIR DB
 // ============================================================
+async function reactivarProductos() {
+  if (!confirm('Esto reactivará todos los productos marcados como inactivos en el Sheet. ¿Continuar?')) return;
+  showLoading();
+  try {
+    const res = await api({ action: 'reactivate' });
+    toast(res.message || 'Productos reactivados ✓', 'success');
+    await loadAll();
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
+  } finally {
+    hideLoading();
+  }
+}
+
 async function repairDB() {
   if (!confirm('Esto reparará los encabezados del Google Sheet. ¿Continuar?')) return;
   showLoading();
