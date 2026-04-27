@@ -1855,7 +1855,7 @@ function renderSaleProducts() {
       <div class="pname">${esc(p.nombre)}</div>
       <div class="price">${fmt(p.precio_venta)}</div>
       <div class="stock-info ${parseInt(p.stock) <= (parseInt(p.stock_minimo)||3) ? 'stock-low' : ''}">
-        Stock: ${p.stock} uds
+        ${(()=>{ const t=getTallas(p); const keys=Object.keys(t).filter(k=>t[k]>0); return keys.length>0 ? keys.map(k=>k+':'+t[k]).join(' ') : 'Stock: '+p.stock+' uds'; })()}
       </div>
     </div>`;
   }).join('');
@@ -1894,22 +1894,30 @@ function addToCart(prodId) {
 }
 
 function openTallaModal(p) {
+  const tallasObj = getTallas(p);
   document.getElementById('tallaSelProductName').textContent = p.nombre;
   const btns = document.getElementById('tallaBtns');
-  btns.innerHTML = TALLAS_ORDER.filter(t => (parseInt(p.tallas[t]) || 0) > 0).map(t =>
+  btns.innerHTML = TALLAS_ORDER.filter(t => (parseInt(tallasObj[t]) || 0) > 0).map(t =>
     `<button class="btn btn-ghost" style="flex-direction:column;gap:2px;padding:12px 8px" onclick="addToCartWithTalla('${p.id}','${t}');closeModal('modalTalla')">
       <span style="font-family:var(--font-mono);font-weight:700">${t}</span>
-      <span style="font-size:0.7rem;color:var(--text-dim)">${p.tallas[t]} disp.</span>
+      <span style="font-size:0.7rem;color:var(--text-dim)">${tallasObj[t]} disp.</span>
     </button>`
   ).join('');
   document.getElementById('modalTalla').classList.add('open');
   document.getElementById('modalTalla')._prod = p;
 }
 
+function getTallas(p) {
+  if (!p.tallas) return {};
+  if (typeof p.tallas === 'object') return p.tallas;
+  try { return JSON.parse(p.tallas); } catch(e) { return {}; }
+}
+
 function addToCartWithTalla(prodId, talla) {
   const p = state.products.find(x => x.id === prodId);
   if (!p) return;
-  const available = parseInt(p.tallas?.[talla]) || 0;
+  const tallas = getTallas(p);
+  const available = parseInt(tallas[talla]) || 0;
   const alreadyInCart = cart.filter(i => i.producto_id === prodId && i.talla === talla).reduce((a,i) => a + i.cantidad, 0);
   if (alreadyInCart >= available) {
     toast(`Stock insuficiente — solo ${available} unidad(es) disponibles en talla ${talla}`, 'error');
@@ -1968,8 +1976,9 @@ function changeQty(idx, delta) {
   const p = state.products.find(x => x.id === item.producto_id);
   if (p && delta > 0) {
     let available;
-    if (item.talla && p.tallas && typeof p.tallas === 'object') {
-      available = parseInt(p.tallas[item.talla]) || 0;
+    if (item.talla) {
+      const tallas = getTallas(p);
+      available = parseInt(tallas[item.talla]) || 0;
     } else {
       available = parseInt(p.stock) || 0;
     }
@@ -2000,8 +2009,9 @@ async function confirmSale() {
     const p = state.products.find(x => x.id === item.producto_id);
     if (!p) { toast(`Producto no encontrado: ${item.nombre}`, 'error'); return; }
     let available;
-    if (item.talla && p.tallas && typeof p.tallas === 'object') {
-      available = parseInt(p.tallas[item.talla]) || 0;
+    if (item.talla) {
+      const tallas = getTallas(p);
+      available = parseInt(tallas[item.talla]) || 0;
     } else {
       available = parseInt(p.stock) || 0;
     }
@@ -2203,13 +2213,20 @@ function confirmDelete(type, id, label) {
     closeModal('modalConfirm');
     showLoading();
     try {
-      if (type === 'product') await api({ action: 'deleteProduct', id });
-      else if (type === 'sale') await api({ action: 'deleteSale', id });
-      else if (type === 'cat') await api({ action: 'deleteCategory', name: id });
-      toast('Eliminado ✓', 'success');
-      await loadAll();
+      let res;
+      if (type === 'product') res = await api({ action: 'deleteProduct', id: String(id) });
+      else if (type === 'sale') res = await api({ action: 'deleteSale', id: String(id) });
+      else if (type === 'cat') res = await api({ action: 'deleteCategory', name: String(id) });
+      if (res && res.success) {
+        toast('Eliminado ✓', 'success');
+        await loadAll();
+      } else {
+        toast('Error al eliminar: ' + (res?.error || 'desconocido'), 'error');
+        console.error('Delete error:', res);
+      }
     } catch(e) {
       toast('Error: ' + e.message, 'error');
+      console.error('Delete exception:', e);
     } finally {
       hideLoading();
     }
