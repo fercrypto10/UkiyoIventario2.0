@@ -1220,6 +1220,7 @@ tr:hover td { background: var(--bg-elevated); color: var(--text-primary); }
                 <input type="text" class="form-input" id="newUserPass" placeholder="ej. Pass123@">
               </div>
               <button class="btn btn-primary" onclick="addUser()">+ Agregar</button>
+              <button class="btn btn-ghost" onclick="testUserSync()">🔍 Test Sync</button>
             </div>
             <div class="table-wrap">
               <table>
@@ -2252,6 +2253,24 @@ function renderUsers() {
       </td>
     </tr>`
   ).join('');
+}
+
+async function testUserSync() {
+  const creds = getCredentials();
+  showLoading();
+  try {
+    const params = { action: 'saveUsers' };
+    creds.forEach((u, i) => {
+      params['u' + i] = JSON.stringify({ user: u.user, pass: u.pass, name: u.name, role: u.role || 'Admin' });
+    });
+    console.log('Enviando params:', JSON.stringify(params));
+    const res = await api(params);
+    alert('Respuesta:\n' + JSON.stringify(res, null, 2));
+  } catch(e) {
+    alert('Error: ' + e.message);
+  } finally {
+    hideLoading();
+  }
 }
 
 function addUser() {
