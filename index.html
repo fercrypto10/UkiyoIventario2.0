@@ -1203,9 +1203,38 @@ tr:hover td { background: var(--bg-elevated); color: var(--text-primary); }
           </div>
         </div>
 
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:20px">
-          <button class="btn btn-ghost" onclick="repairDB()" title="Repara los encabezados del Google Sheet si los datos no aparecen">🔧 Reparar Base de Datos</button>
-          <button class="btn btn-ghost" onclick="reactivarProductos()" title="Reactiva productos que aparecen como inactivos en el Sheet">♻️ Reactivar Productos</button>
+        <div class="config-section">
+          <div class="config-section-title">👤 USUARIOS</div>
+          <div class="card" style="padding:16px;margin-bottom:0">
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:10px;margin-bottom:14px;align-items:end">
+              <div class="form-group">
+                <label class="form-label">Nombre</label>
+                <input type="text" class="form-input" id="newUserName" placeholder="ej. Santiago">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Usuario</label>
+                <input type="text" class="form-input" id="newUserUser" placeholder="ej. Ukiyo1">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Contraseña</label>
+                <input type="text" class="form-input" id="newUserPass" placeholder="ej. Pass123@">
+              </div>
+              <button class="btn btn-primary" onclick="addUser()">+ Agregar</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Nombre</th><th>Usuario</th><th>Contraseña</th><th></th></tr></thead>
+                <tbody id="usersTbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:20px;flex-wrap:wrap;gap:10px">
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <button class="btn btn-ghost" onclick="repairDB()" title="Repara los encabezados del Google Sheet si los datos no aparecen">🔧 Reparar Base de Datos</button>
+            <button class="btn btn-ghost" onclick="reactivarProductos()" title="Reactiva productos que aparecen como inactivos en el Sheet">♻️ Reactivar Productos</button>
+          </div>
           <button class="btn btn-primary" onclick="saveConfig()">💾 Guardar Configuración</button>
         </div>
       </div>
@@ -1329,10 +1358,43 @@ tr:hover td { background: var(--bg-elevated); color: var(--text-primary); }
 // ============================================================
 const API_URL = 'https://script.google.com/macros/s/AKfycbzg5t0JkV7smBHYYvdC2bB_JHbs0_9lV-vZLqwMtcCLWpl1jB8KMy437QRUPouMMLGW2A/exec';
 
-const CREDENTIALS = [
+// Credenciales — sincronizadas con Google Sheet + cache local
+const DEFAULT_CREDENTIALS = [
   { user: 'Ukiyo1', pass: 'Santiago72@', name: 'Santiago', role: 'Admin' },
   { user: 'Pamela1', pass: 'Pamela72@', name: 'Pamela', role: 'Admin' }
 ];
+
+function getCredentials() {
+  try {
+    const saved = localStorage.getItem('ukiyo_credentials');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed && parsed.length > 0) return parsed;
+    }
+  } catch(e) {}
+  return DEFAULT_CREDENTIALS;
+}
+
+function saveCredentials(creds) {
+  localStorage.setItem('ukiyo_credentials', JSON.stringify(creds));
+}
+
+async function syncUsersFromSheet() {
+  try {
+    const res = await api({ action: 'getUsers' });
+    if (res && res.success && res.data && res.data.length > 0) {
+      saveCredentials(res.data);
+      return res.data;
+    }
+  } catch(e) { console.log('Users sync skipped:', e.message); }
+  return getCredentials();
+}
+
+async function pushUsersToSheet(creds) {
+  try {
+    await api({ action: 'saveUsers', users: JSON.stringify(creds) });
+  } catch(e) { console.log('Users push failed:', e.message); }
+}
 
 const TALLAS_ORDER = ['10/12','XS','S','M','L','XL','XXL','XXXL'];
 
@@ -1355,7 +1417,7 @@ let state = {
 function doLogin() {
   const u = document.getElementById('loginUser').value.trim();
   const p = document.getElementById('loginPass').value;
-  const match = CREDENTIALS.find(c => c.user === u && c.pass === p);
+  const match = getCredentials().find(c => c.user === u && c.pass === p);
   if (match) {
     sessionStorage.setItem('ukiyo_user', JSON.stringify(match));
     startSession(match);
@@ -1381,7 +1443,7 @@ function checkSession() {
     if (saved) {
       const match = JSON.parse(saved);
       // Verify still valid
-      const valid = CREDENTIALS.find(c => c.user === match.user && c.pass === match.pass);
+      const valid = getCredentials().find(c => c.user === match.user && c.pass === match.pass);
       if (valid) { startSession(valid); return true; }
     }
   } catch(e) {}
@@ -1459,6 +1521,8 @@ async function loadAll() {
     state.config = data.config || {};
     state.categories = data.categories || [];
     state.loaded = true;
+    // Sync users from Sheet
+    await syncUsersFromSheet();
 
     renderAll();
     toast('Datos cargados', 'success');
@@ -2150,6 +2214,78 @@ function renderConfig() {
       <td><button class="btn btn-danger btn-sm" onclick="confirmDelete('cat','${esc(c.nombre)}','${esc(c.nombre)}')">🗑</button></td>
     </tr>`
   ).join('');
+
+  // Usuarios
+  renderUsers();
+}
+
+function renderUsers() {
+  const creds = getCredentials();
+  const tbody = document.getElementById('usersTbody');
+  if (!tbody) return;
+  tbody.innerHTML = creds.map((u, i) =>
+    `<tr>
+      <td>
+        <input type="text" class="form-input" style="padding:6px 10px;font-size:0.82rem" value="${esc(u.name)}" onchange="updateUser(${i},'name',this.value)">
+      </td>
+      <td>
+        <input type="text" class="form-input" style="padding:6px 10px;font-size:0.82rem" value="${esc(u.user)}" onchange="updateUser(${i},'user',this.value)">
+      </td>
+      <td>
+        <input type="text" class="form-input" style="padding:6px 10px;font-size:0.82rem" value="${esc(u.pass)}" onchange="updateUser(${i},'pass',this.value)">
+      </td>
+      <td>
+        ${creds.length > 1
+          ? `<button class="btn btn-danger btn-sm" onclick="deleteUser(${i})">🗑</button>`
+          : `<span style="font-size:0.72rem;color:var(--text-dim)">Mín. 1</span>`
+        }
+      </td>
+    </tr>`
+  ).join('');
+}
+
+function addUser() {
+  const name = document.getElementById('newUserName').value.trim();
+  const user = document.getElementById('newUserUser').value.trim();
+  const pass = document.getElementById('newUserPass').value.trim();
+  if (!name || !user || !pass) { toast('Completa todos los campos del usuario', 'error'); return; }
+  const creds = getCredentials();
+  if (creds.find(c => c.user === user)) { toast('Ese nombre de usuario ya existe', 'error'); return; }
+  creds.push({ user, pass, name, role: 'Admin' });
+  saveCredentials(creds);
+  pushUsersToSheet(creds);
+  document.getElementById('newUserName').value = '';
+  document.getElementById('newUserUser').value = '';
+  document.getElementById('newUserPass').value = '';
+  renderUsers();
+  toast('Usuario agregado ✓ — sincronizando...', 'success');
+}
+
+function updateUser(idx, field, value) {
+  const creds = getCredentials();
+  if (!creds[idx]) return;
+  creds[idx][field] = value;
+  saveCredentials(creds);
+  pushUsersToSheet(creds);
+  // If editing current user's name, update sidebar live
+  if (state.currentUser && creds[idx].user === state.currentUser.user) {
+    state.currentUser = creds[idx];
+    sessionStorage.setItem('ukiyo_user', JSON.stringify(state.currentUser));
+    document.getElementById('userName').textContent = state.currentUser.name;
+    document.getElementById('userAvatar').textContent = state.currentUser.name.charAt(0).toUpperCase();
+  }
+  toast('Usuario actualizado ✓', 'success');
+}
+
+function deleteUser(idx) {
+  const creds = getCredentials();
+  if (creds.length <= 1) { toast('Debe haber al menos un usuario', 'error'); return; }
+  const nombre = creds[idx].name;
+  creds.splice(idx, 1);
+  saveCredentials(creds);
+  pushUsersToSheet(creds);
+  renderUsers();
+  toast(`Usuario "${nombre}" eliminado ✓`, 'success');
 }
 
 async function saveConfig() {
