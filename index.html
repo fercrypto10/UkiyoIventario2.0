@@ -914,6 +914,9 @@ tr:hover td { background: var(--bg-elevated); color: var(--text-primary); }
         <div class="nav-item" onclick="navigate('config')" id="nav-config">
           <span class="icon">⚙️</span> Configuración
         </div>
+        <div class="nav-item" onclick="navigate('finanzas')" id="nav-finanzas">
+          <span class="icon">📊</span> Finanzas
+        </div>
       </nav>
       <div class="sidebar-footer">
         <div class="user-chip">
@@ -981,6 +984,29 @@ tr:hover td { background: var(--bg-elevated); color: var(--text-primary); }
         </div>
 
         <div id="alertsZone"></div>
+
+        <div class="stats-grid" id="inventoryStatsGrid" style="margin-bottom:20px">
+          <div class="stat-card blue">
+            <div class="stat-label">Total Invertido</div>
+            <div class="stat-value mono" id="statInvertido">$0.00</div>
+            <div class="stat-sub">Costo × stock actual</div>
+          </div>
+          <div class="stat-card green">
+            <div class="stat-label">Valor Potencial</div>
+            <div class="stat-value mono" id="statPotencial">$0.00</div>
+            <div class="stat-sub">Precio venta × stock actual</div>
+          </div>
+          <div class="stat-card amber">
+            <div class="stat-label">Ganancia Potencial</div>
+            <div class="stat-value mono" id="statGananciaPotencial">$0.00</div>
+            <div class="stat-sub">Si vendes todo el inventario</div>
+          </div>
+          <div class="stat-card red">
+            <div class="stat-label">Utilidad Neta Mes</div>
+            <div class="stat-value mono" id="statUtilidadMes">$0.00</div>
+            <div class="stat-sub">Ventas − Gastos del mes</div>
+          </div>
+        </div>
 
         <div class="dashboard-grid">
           <div class="card">
@@ -1212,6 +1238,65 @@ tr:hover td { background: var(--bg-elevated); color: var(--text-primary); }
         </div>
       </div>
 
+      <!-- ===================== FINANZAS ===================== -->
+      <div class="page" id="page-finanzas">
+        <div class="page-header">
+          <div>
+            <div class="page-title">FINANZAS</div>
+            <div class="page-subtitle">Gastos operativos y utilidad neta</div>
+          </div>
+          <button class="btn btn-primary" onclick="openGastoModal()">+ Agregar Gasto</button>
+        </div>
+
+        <div class="stats-grid" id="finanzasStats">
+          <div class="stat-card green">
+            <div class="stat-label">Ingresos del Mes</div>
+            <div class="stat-value mono" id="finIngresosMes">$0.00</div>
+            <div class="stat-sub">Ventas registradas</div>
+          </div>
+          <div class="stat-card red">
+            <div class="stat-label">Gastos del Mes</div>
+            <div class="stat-value mono" id="finGastosMes">$0.00</div>
+            <div class="stat-sub">Gastos operativos</div>
+          </div>
+          <div class="stat-card blue">
+            <div class="stat-label">Utilidad Neta</div>
+            <div class="stat-value mono" id="finUtilidadMes">$0.00</div>
+            <div class="stat-sub">Ingresos − Gastos</div>
+          </div>
+          <div class="stat-card amber">
+            <div class="stat-label">Ganancia Bruta Mes</div>
+            <div class="stat-value mono" id="finGananciaBruta">$0.00</div>
+            <div class="stat-sub">Solo margen de productos</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">GASTOS OPERATIVOS</div>
+            <div class="page-actions">
+              <input type="month" class="form-input" id="finMesFiltro" style="width:160px" onchange="renderFinanzas()">
+              <select class="filter-select" id="finCatFiltro" onchange="renderFinanzas()">
+                <option value="">Todas las categorías</option>
+                <option>Alquiler</option>
+                <option>Envíos</option>
+                <option>Servicios</option>
+                <option>Publicidad</option>
+                <option>Compras</option>
+                <option>Personal</option>
+                <option>Otros</option>
+              </select>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th>Monto</th><th></th></tr></thead>
+              <tbody id="gastosTbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
     </main>
   </div>
 </div>
@@ -1317,6 +1402,53 @@ tr:hover td { background: var(--bg-elevated); color: var(--text-primary); }
       <div class="modal-footer">
         <button class="btn btn-ghost" onclick="closeModal('modalConfirm')">Cancelar</button>
         <button class="btn btn-danger" id="confirmBtn">Eliminar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL — GASTO -->
+<div class="modal-overlay" id="modalGasto">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-header">
+      <div class="modal-title" id="modalGastoTitle">NUEVO GASTO</div>
+      <button class="modal-close" onclick="closeModal('modalGasto')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="gastoId">
+      <div class="form-grid">
+        <div class="form-group span-2">
+          <label class="form-label">Descripción *</label>
+          <input type="text" class="form-input" id="gastoDesc" placeholder="ej. Pago de alquiler local">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Categoría</label>
+          <select class="form-select" id="gastoCat">
+            <option>Alquiler</option>
+            <option>Envíos</option>
+            <option>Servicios</option>
+            <option>Publicidad</option>
+            <option>Compras</option>
+            <option>Personal</option>
+            <option>Otros</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Monto (USD)</label>
+          <input type="number" class="form-input" id="gastoMonto" placeholder="0.00" step="0.01" min="0">
+        </div>
+        <div class="form-group span-2">
+          <label class="form-label">Fecha</label>
+          <input type="date" class="form-input" id="gastoFecha">
+        </div>
+        <div class="form-group span-2">
+          <label class="form-label">Notas (opcional)</label>
+          <input type="text" class="form-input" id="gastoNotas" placeholder="Observaciones...">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal('modalGasto')">Cancelar</button>
+        <button class="btn btn-primary" onclick="saveGasto()">💾 Guardar</button>
       </div>
     </div>
   </div>
@@ -1462,6 +1594,7 @@ async function loadAll() {
     state.sales = data.sales || [];
     state.config = data.config || {};
     state.categories = data.categories || [];
+    state.gastos = data.gastos || [];
     state.loaded = true;
 
     renderAll();
@@ -1481,6 +1614,7 @@ function renderAll() {
   renderConfig();
   renderCategoryFilters();
   renderSaleProducts();
+  renderFinanzas();
 }
 
 // ============================================================
@@ -1552,6 +1686,24 @@ function renderDashboard() {
   document.getElementById('statMargenHoy').textContent = `Margen: ${margenHoy}%`;
 
   document.getElementById('statStockBajo').textContent = lowStock.length;
+
+  // Inventory value stats
+  let totalInvertido = 0, totalPotencial = 0;
+  state.products.forEach(p => {
+    const stock = parseInt(p.stock) || 0;
+    totalInvertido += (parseFloat(p.costo) || 0) * stock;
+    totalPotencial += (parseFloat(p.precio_venta) || 0) * stock;
+  });
+  const gananciaPot = totalPotencial - totalInvertido;
+  document.getElementById('statInvertido').textContent = fmt(totalInvertido);
+  document.getElementById('statPotencial').textContent = fmt(totalPotencial);
+  document.getElementById('statGananciaPotencial').textContent = fmt(gananciaPot);
+
+  // Utilidad neta mes (ventas - gastos)
+  const gastosMesTotal = (state.gastos || []).filter(g => String(g.fecha).slice(0,7) === monthStr).reduce((a,g) => a+(parseFloat(g.monto)||0), 0);
+  const utilidadMes = ventasMes.reduce((a,s) => a+(parseFloat(s.ganancia)||0), 0) - gastosMesTotal;
+  const utEl = document.getElementById('statUtilidadMes');
+  if (utEl) { utEl.textContent = fmt(utilidadMes); utEl.style.color = utilidadMes >= 0 ? 'var(--green-bright)' : 'var(--red-bright)'; }
 
   // Alertas
   const alertsZone = document.getElementById('alertsZone');
@@ -2354,6 +2506,7 @@ function confirmDelete(type, id, label) {
       if (type === 'product') res = await api({ action: 'deleteProduct', id: String(id) });
       else if (type === 'sale') res = await api({ action: 'deleteSale', id: String(id) });
       else if (type === 'cat') res = await api({ action: 'deleteCategory', name: String(id) });
+      else if (type === 'gasto') res = await api({ action: 'deleteGasto', id: String(id) });
       if (res && res.success) {
         toast('Eliminado ✓', 'success');
         await loadAll();
@@ -2439,6 +2592,131 @@ setInterval(() => {
 // ============================================================
 // REPAIR DB
 // ============================================================
+// ============================================================
+// FINANZAS — GASTOS
+// ============================================================
+function openGastoModal(id) {
+  const today = new Date().toISOString().split('T')[0];
+  if (id) {
+    const g = (state.gastos || []).find(x => x.id === id);
+    if (!g) return;
+    document.getElementById('modalGastoTitle').textContent = 'EDITAR GASTO';
+    document.getElementById('gastoId').value = g.id;
+    document.getElementById('gastoDesc').value = g.descripcion;
+    document.getElementById('gastoCat').value = g.categoria;
+    document.getElementById('gastoMonto').value = g.monto;
+    document.getElementById('gastoFecha').value = String(g.fecha).slice(0,10);
+    document.getElementById('gastoNotas').value = g.notas || '';
+  } else {
+    document.getElementById('modalGastoTitle').textContent = 'NUEVO GASTO';
+    document.getElementById('gastoId').value = '';
+    document.getElementById('gastoDesc').value = '';
+    document.getElementById('gastoMonto').value = '';
+    document.getElementById('gastoFecha').value = today;
+    document.getElementById('gastoNotas').value = '';
+  }
+  document.getElementById('modalGasto').classList.add('open');
+}
+
+async function saveGasto() {
+  const desc  = document.getElementById('gastoDesc').value.trim();
+  const monto = parseFloat(document.getElementById('gastoMonto').value) || 0;
+  const fecha = document.getElementById('gastoFecha').value;
+  if (!desc || !monto || !fecha) { toast('Completa descripción, monto y fecha', 'error'); return; }
+  const data = {
+    action: 'saveGasto',
+    id:          document.getElementById('gastoId').value,
+    descripcion: desc,
+    categoria:   document.getElementById('gastoCat').value,
+    monto:       monto,
+    fecha:       fecha,
+    notas:       document.getElementById('gastoNotas').value
+  };
+  showLoading();
+  try {
+    await api(data);
+    toast('Gasto guardado ✓', 'success');
+    closeModal('modalGasto');
+    await loadAll();
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
+  } finally { hideLoading(); }
+}
+
+async function deleteGasto(id) {
+  showLoading();
+  try {
+    await api({ action: 'deleteGasto', id });
+    toast('Gasto eliminado ✓', 'success');
+    await loadAll();
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
+  } finally { hideLoading(); }
+}
+
+function renderFinanzas() {
+  const gastos = state.gastos || [];
+  const now    = new Date();
+  const mes    = document.getElementById('finMesFiltro')?.value || now.toISOString().slice(0,7);
+  const catF   = document.getElementById('finCatFiltro')?.value || '';
+
+  // Set default month filter
+  if (document.getElementById('finMesFiltro') && !document.getElementById('finMesFiltro').value) {
+    document.getElementById('finMesFiltro').value = mes;
+  }
+
+  // Gastos del mes filtrado
+  let gastosMes = gastos.filter(g => String(g.fecha).slice(0,7) === mes);
+  if (catF) gastosMes = gastosMes.filter(g => g.categoria === catF);
+  const totalGastos = gastosMes.reduce((a,g) => a + (parseFloat(g.monto)||0), 0);
+
+  // Ventas e ingresos del mes
+  const ventasMes   = state.sales.filter(s => String(s.fecha).slice(0,7) === mes);
+  const ingresosMes = ventasMes.reduce((a,s) => a + (parseFloat(s.total)||0), 0);
+  const gananciaBruta = ventasMes.reduce((a,s) => a + (parseFloat(s.ganancia)||0), 0);
+  const utilidad    = gananciaBruta - totalGastos;
+
+  document.getElementById('finIngresosMes').textContent  = fmt(ingresosMes);
+  document.getElementById('finGastosMes').textContent    = fmt(totalGastos);
+  const utEl = document.getElementById('finUtilidadMes');
+  utEl.textContent = fmt(utilidad);
+  utEl.style.color = utilidad >= 0 ? 'var(--green-bright)' : 'var(--red-bright)';
+  document.getElementById('finGananciaBruta').textContent = fmt(gananciaBruta);
+
+  // Update dashboard utilidad too
+  const dashUt = document.getElementById('statUtilidadMes');
+  if (dashUt) {
+    const curMes = now.toISOString().slice(0,7);
+    const gCurMes = (gastos).filter(g => String(g.fecha).slice(0,7) === curMes).reduce((a,g) => a+(parseFloat(g.monto)||0),0);
+    const gBCurMes = state.sales.filter(s => String(s.fecha).slice(0,7) === curMes).reduce((a,s) => a+(parseFloat(s.ganancia)||0),0);
+    const utCur = gBCurMes - gCurMes;
+    dashUt.textContent = fmt(utCur);
+    dashUt.style.color = utCur >= 0 ? 'var(--green-bright)' : 'var(--red-bright)';
+  }
+
+  // Render table
+  const tbody = document.getElementById('gastosTbody');
+  if (!tbody) return;
+  if (gastosMes.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:32px">Sin gastos en este período</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = [...gastosMes].sort((a,b) => new Date(b.fecha)-new Date(a.fecha)).map(g =>
+    `<tr>
+      <td style="font-size:0.82rem">${fmtDate(g.fecha)}</td>
+      <td class="td-name">${esc(g.descripcion)}</td>
+      <td><span class="badge badge-blue">${esc(g.categoria)}</span></td>
+      <td class="td-money" style="color:var(--red-bright)">${fmt(g.monto)}</td>
+      <td>
+        <div class="td-actions">
+          <button class="btn btn-ghost btn-sm btn-icon" onclick="openGastoModal('${g.id}')">✏️</button>
+          <button class="btn btn-danger btn-sm btn-icon" onclick="confirmDelete('gasto','${g.id}','${esc(g.descripcion)}')">🗑</button>
+        </div>
+      </td>
+    </tr>`
+  ).join('');
+}
+
 async function reactivarProductos() {
   if (!confirm('Esto reactivará todos los productos marcados como inactivos en el Sheet. ¿Continuar?')) return;
   showLoading();
