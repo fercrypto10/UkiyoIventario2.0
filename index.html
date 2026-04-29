@@ -2519,7 +2519,7 @@ function renderHistorial() {
       <td class="td-money">${fmt(s.total)}</td>
       <td class="td-money" style="color:var(--green-bright)">${fmt(s.ganancia)}</td>
       <td><span class="badge badge-gray">${esc(s.metodo_pago)}</span></td>
-      <td><button class="btn btn-danger btn-sm btn-icon" onclick="confirmDelete('sale','${saleBaseId}','esta venta')">🗑</button></td>
+      <td><button class="btn btn-danger btn-sm btn-icon" onclick="confirmDelete('sale','${saleBaseId}','${esc(s.producto_nombre)}')">🗑</button></td>
     </tr>`;
   }).join('');
 }
@@ -3068,19 +3068,26 @@ function renderEstadisticas(){
   document.getElementById('rankMenosVendidos').innerHTML=rl([...prods].filter(p=>p.u>0).sort((a,b)=>a.u-b.u).slice(0,5),'u',v=>v+' uds');
   document.getElementById('rankMayorGanancia').innerHTML=rl([...prods].sort((a,b)=>b.gan-a.gan).slice(0,10),'gan',fmt);
 
-  // Margen % por inventario (Top 10 productos activos)
-  const invRanked = state.products
+  // Margen % por inventario — top 1 por categoría (evita repetición del mismo proveedor)
+  const allWithMargen = state.products
     .filter(p => parseFloat(p.costo)>0 && parseFloat(p.precio_venta)>0)
     .map(p => {
       const costo=parseFloat(p.costo), precio=parseFloat(p.precio_venta);
-      const gan=precio-costo, pct=((gan/costo)*100);
-      return { nombre:p.nombre, cat:p.categoria, u:pct, ing:gan, gan:pct };
+      const pct=((precio-costo)/costo)*100;
+      return { nombre:p.nombre, cat:p.categoria, pct };
     })
-    .sort((a,b)=>b.gan-a.gan).slice(0,10);
+    .sort((a,b)=>b.pct-a.pct);
+  // Keep only the best product per category
+  const seenCats = new Set();
+  const invRanked = allWithMargen.filter(p => {
+    if (seenCats.has(p.cat)) return false;
+    seenCats.add(p.cat);
+    return true;
+  }).slice(0,10);
   document.getElementById('rankMargenInventario').innerHTML = invRanked.length
     ? invRanked.map((p,i) => {
-        const color = p.gan>=50?'var(--green-bright)':p.gan>=30?'var(--amber-bright)':'var(--text-secondary)';
-        return `<div class="stat-rank-item"><div class="stat-rank-num ${rc[i]||''}">${rn[i]||i+1}</div><div class="stat-rank-info"><div class="stat-rank-name">${esc(p.nombre)}</div><div class="stat-rank-sub">${esc(p.cat)}</div></div><div class="stat-rank-val" style="color:${color}">${p.gan.toFixed(1)}%</div></div>`;
+        const color = p.pct>=50?'var(--green-bright)':p.pct>=30?'var(--amber-bright)':'var(--text-secondary)';
+        return `<div class="stat-rank-item"><div class="stat-rank-num ${rc[i]||''}">${rn[i]||i+1}</div><div class="stat-rank-info"><div class="stat-rank-name">${esc(p.nombre)}</div><div class="stat-rank-sub">${esc(p.cat)}</div></div><div class="stat-rank-val" style="color:${color}">${p.pct.toFixed(1)}%</div></div>`;
       }).join('')
     : '<div class="empty-state" style="padding:20px"><p>Sin productos con precio y costo</p></div>';
 
