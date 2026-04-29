@@ -1392,8 +1392,25 @@ tr:hover td { background: var(--bg-elevated); color: var(--text-primary); }
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
           <div class="card"><div class="card-header"><div class="card-title">🏆 MÁS VENDIDOS</div></div><div id="rankMasVendidos"></div></div>
           <div class="card"><div class="card-header"><div class="card-title">📉 MENOS VENDIDOS</div></div><div id="rankMenosVendidos"></div></div>
-          <div class="card"><div class="card-header"><div class="card-title">💰 MAYOR GANANCIA</div></div><div id="rankMayorGanancia"></div></div>
+        </div>
+        <div class="card" style="margin-bottom:20px">
+          <div class="card-header">
+            <div class="card-title">💰 GANANCIAS — TOP 10</div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+            <div>
+              <div style="font-size:.68rem;letter-spacing:2px;text-transform:uppercase;color:var(--text-dim);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border)">Ganancia real en ventas (histórico)</div>
+              <div id="rankMayorGanancia"></div>
+            </div>
+            <div>
+              <div style="font-size:.68rem;letter-spacing:2px;text-transform:uppercase;color:var(--text-dim);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border)">Mayor margen % en inventario — Top 10</div>
+              <div id="rankMargenInventario"></div>
+            </div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
           <div class="card"><div class="card-header"><div class="card-title">📦 POR CATEGORÍA</div></div><div id="rankCategorias"></div></div>
+          <div class="card"><div class="card-header"><div class="card-title">⭐ MEJOR RELACIÓN VENTAS+GANANCIA</div><div style="font-size:.75rem;color:var(--text-dim)">Los que más vendés y dejan más margen</div></div><div id="rankEficiencia"></div></div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
           <div class="card"><div class="card-header"><div class="card-title">📅 MEJOR DÍA</div></div><div id="rankDias"></div></div>
@@ -1497,14 +1514,21 @@ tr:hover td { background: var(--bg-elevated); color: var(--text-primary); }
 
 <!-- MODAL — Confirmar eliminación -->
 <div class="modal-overlay" id="modalConfirm">
-  <div class="modal" style="max-width:380px">
+  <div class="modal" style="max-width:400px">
     <div class="modal-header">
-      <div class="modal-title">CONFIRMAR</div>
+      <div class="modal-title" id="confirmTitle">CONFIRMAR</div>
       <button class="modal-close" onclick="closeModal('modalConfirm')">✕</button>
     </div>
     <div class="modal-body">
-      <p id="confirmMsg" style="color:var(--text-secondary);margin-bottom:20px;font-size:0.9rem"></p>
-      <div class="modal-footer">
+      <p id="confirmMsg" style="color:var(--text-secondary);margin-bottom:16px;font-size:0.9rem"></p>
+      <div id="refundQuestion" style="display:none;margin-bottom:20px">
+        <div style="font-size:.8rem;color:var(--text-dim);margin-bottom:10px;text-transform:uppercase;letter-spacing:1px">¿Es una devolución?</div>
+        <div style="display:flex;gap:10px">
+          <button class="btn btn-success" style="flex:1" id="btnSiDevolucion">↩ Sí, devolver stock</button>
+          <button class="btn btn-danger" style="flex:1" id="btnNoDevolucion">🗑 No, solo eliminar</button>
+        </div>
+      </div>
+      <div class="modal-footer" id="confirmFooter">
         <button class="btn btn-ghost" onclick="closeModal('modalConfirm')">Cancelar</button>
         <button class="btn btn-danger" id="confirmBtn">Eliminar</button>
       </div>
@@ -2748,31 +2772,41 @@ function deleteProductById(id, nombre) {
 }
 
 function confirmDelete(type, id, label) {
-  document.getElementById('confirmMsg').textContent = `¿Estás seguro que quieres eliminar "${label}"? Esta acción no se puede deshacer.`;
-  const btn = document.getElementById('confirmBtn');
-  btn.onclick = async () => {
+  const isSale = type === 'sale';
+  document.getElementById('confirmTitle').textContent = isSale ? 'ELIMINAR VENTA' : 'CONFIRMAR';
+  document.getElementById('confirmMsg').textContent = isSale
+    ? `¿Eliminar la venta de "${label}"?`
+    : `¿Eliminar "${label}"? Esta acción no se puede deshacer.`;
+  document.getElementById('refundQuestion').style.display = isSale ? 'block' : 'none';
+  document.getElementById('confirmFooter').style.display = isSale ? 'none' : 'flex';
+
+  async function doDelete(restoreStock) {
     closeModal('modalConfirm');
     showLoading();
     try {
       let res;
-      if (type === 'product') res = await api({ action: 'deleteProduct', id: String(id) });
-      else if (type === 'sale') res = await api({ action: 'deleteSale', id: String(id) });
+      if (type === 'product')  res = await api({ action: 'deleteProduct',  id: String(id) });
+      else if (type === 'sale') res = await api({ action: 'deleteSale', id: String(id), restoreStock: restoreStock });
       else if (type === 'cat') res = await api({ action: 'deleteCategory', name: String(id) });
       else if (type === 'gasto') res = await api({ action: 'deleteGasto', id: String(id) });
+      else if (type === 'orden') res = await api({ action: 'deleteOrden', id: String(id) });
+      else if (type === 'insumo') res = await api({ action: 'deleteInsumo', id: String(id) });
       if (res && res.success) {
-        toast('Eliminado ✓', 'success');
+        toast(restoreStock ? 'Venta eliminada y stock devuelto ✓' : 'Eliminado ✓', 'success');
         await loadAll();
       } else {
-        toast('Error al eliminar: ' + (res?.error || 'desconocido'), 'error');
-        console.error('Delete error:', res);
+        toast('Error: ' + (res?.error || 'desconocido'), 'error');
       }
     } catch(e) {
       toast('Error: ' + e.message, 'error');
-      console.error('Delete exception:', e);
     } finally {
       hideLoading();
     }
-  };
+  }
+
+  document.getElementById('confirmBtn').onclick = () => doDelete(false);
+  document.getElementById('btnSiDevolucion').onclick = () => doDelete(true);
+  document.getElementById('btnNoDevolucion').onclick = () => doDelete(false);
   document.getElementById('modalConfirm').classList.add('open');
 }
 
@@ -3032,7 +3066,35 @@ function renderEstadisticas(){
   function rl(items,key,vfn){if(!items.length)return'<div class="empty-state" style="padding:20px"><p>Sin datos</p></div>';return items.map((p,i)=>`<div class="stat-rank-item"><div class="stat-rank-num ${rc[i]||''}">${rn[i]||i+1}</div><div class="stat-rank-info"><div class="stat-rank-name">${esc(p.nombre)}</div><div class="stat-rank-sub">${esc(p.cat)}</div></div><div class="stat-rank-val">${vfn(p[key])}</div></div>`).join('');}
   document.getElementById('rankMasVendidos').innerHTML=rl([...prods].sort((a,b)=>b.u-a.u).slice(0,5),'u',v=>v+' uds');
   document.getElementById('rankMenosVendidos').innerHTML=rl([...prods].filter(p=>p.u>0).sort((a,b)=>a.u-b.u).slice(0,5),'u',v=>v+' uds');
-  document.getElementById('rankMayorGanancia').innerHTML=rl([...prods].sort((a,b)=>b.gan-a.gan).slice(0,5),'gan',fmt);
+  document.getElementById('rankMayorGanancia').innerHTML=rl([...prods].sort((a,b)=>b.gan-a.gan).slice(0,10),'gan',fmt);
+
+  // Margen % por inventario (Top 10 productos activos)
+  const invRanked = state.products
+    .filter(p => parseFloat(p.costo)>0 && parseFloat(p.precio_venta)>0)
+    .map(p => {
+      const costo=parseFloat(p.costo), precio=parseFloat(p.precio_venta);
+      const gan=precio-costo, pct=((gan/costo)*100);
+      return { nombre:p.nombre, cat:p.categoria, u:pct, ing:gan, gan:pct };
+    })
+    .sort((a,b)=>b.gan-a.gan).slice(0,10);
+  document.getElementById('rankMargenInventario').innerHTML = invRanked.length
+    ? invRanked.map((p,i) => {
+        const color = p.gan>=50?'var(--green-bright)':p.gan>=30?'var(--amber-bright)':'var(--text-secondary)';
+        return `<div class="stat-rank-item"><div class="stat-rank-num ${rc[i]||''}">${rn[i]||i+1}</div><div class="stat-rank-info"><div class="stat-rank-name">${esc(p.nombre)}</div><div class="stat-rank-sub">${esc(p.cat)}</div></div><div class="stat-rank-val" style="color:${color}">${p.gan.toFixed(1)}%</div></div>`;
+      }).join('')
+    : '<div class="empty-state" style="padding:20px"><p>Sin productos con precio y costo</p></div>';
+
+  // Eficiencia: productos con más ventas Y mejor margen (score = unidades * margen%)
+  const eficiencia = prods.map(p => {
+    const prod = state.products.find(x=>x.nombre===p.nombre);
+    const costo = prod ? parseFloat(prod.costo)||0 : 0;
+    const precio = prod ? parseFloat(prod.precio_venta)||0 : 0;
+    const margen = costo>0 ? ((precio-costo)/costo)*100 : 0;
+    return { nombre:p.nombre, cat:p.cat, u:p.u, gan:p.gan, margen, score: p.u * margen };
+  }).filter(p=>p.score>0).sort((a,b)=>b.score-a.score).slice(0,5);
+  document.getElementById('rankEficiencia').innerHTML = eficiencia.length
+    ? eficiencia.map((p,i) => `<div class="stat-rank-item"><div class="stat-rank-num ${rc[i]||''}">${rn[i]||i+1}</div><div class="stat-rank-info"><div class="stat-rank-name">${esc(p.nombre)}</div><div class="stat-rank-sub">${p.u} uds vendidas · ${p.margen.toFixed(0)}% margen</div></div><div class="stat-rank-val">${fmt(p.gan)}</div></div>`).join('')
+    : '<div class="empty-state" style="padding:20px"><p>Sin datos en este período</p></div>';
   const cm={};sf.forEach(s=>{if(!cm[s.categoria])cm[s.categoria]={nombre:s.categoria,u:0,ing:0};cm[s.categoria].u+=parseInt(s.cantidad)||0;cm[s.categoria].ing+=parseFloat(s.total)||0;});
   const cats=Object.values(cm).sort((a,b)=>b.ing-a.ing);
   document.getElementById('rankCategorias').innerHTML=cats.length?cats.map((c,i)=>`<div class="stat-rank-item"><div class="stat-rank-num ${rc[i]||''}">${rn[i]||i+1}</div><div class="stat-rank-info"><div class="stat-rank-name">${esc(c.nombre)}</div><div class="stat-rank-sub">${c.u} uds</div></div><div class="stat-rank-val">${fmt(c.ing)}</div></div>`).join(''):'<div class="empty-state" style="padding:20px"><p>Sin datos</p></div>';
