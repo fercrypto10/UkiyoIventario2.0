@@ -1652,7 +1652,7 @@ tr:hover td { background: var(--bg-elevated); color: var(--text-primary); }
 const API_URL = 'https://script.google.com/macros/s/AKfycbwiUo67nYV6Yz0VUN6FRMSOBYF1ZqMo-O30aiDIbdwRQObJx18fhY9sWz7KMNvp-0ZW-Q/exec';
 
 const CREDENTIALS = [
-  { user: 'Ukiyo1', pass: 'Santiago72@', name: 'Santiago', role: 'Admin' },
+  { user: 'Ukiyo1', pass: 'Santiago72@', name: 'UkiyoGarage', role: 'Admin' },
   { user: 'Pamela1', pass: 'Pamela72@', name: 'Pamela', role: 'Admin' }
 ];
 
@@ -2508,8 +2508,18 @@ function renderHistorial() {
     tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--text-dim);padding:32px">Sin ventas en este período</td></tr>`;
     return;
   }
+  // Group sales by saleId (V+timestamp prefix) to show one delete per transaction
+  const grouped = {};
+  sales.forEach(s => {
+    const base = String(s.id).split('_')[0];
+    if (!grouped[base]) grouped[base] = { ...s, _rows: [] };
+    grouped[base]._rows.push(s.id);
+    // If multi-item sale, accumulate totals
+    grouped[base].total = (parseFloat(grouped[base].total)||0);
+    grouped[base].ganancia = (parseFloat(grouped[base].ganancia)||0);
+  });
   tbody.innerHTML = sales.map(s => {
-    const saleBaseId = String(s.id).split('_')[0];
+    const baseId = String(s.id).split('_')[0];
     return `<tr>
       <td style="font-size:0.8rem">${fmtDate(s.fecha)}</td>
       <td class="td-name">${esc(s.producto_nombre)}</td>
@@ -2519,7 +2529,7 @@ function renderHistorial() {
       <td class="td-money">${fmt(s.total)}</td>
       <td class="td-money" style="color:var(--green-bright)">${fmt(s.ganancia)}</td>
       <td><span class="badge badge-gray">${esc(s.metodo_pago)}</span></td>
-      <td><button class="btn btn-danger btn-sm btn-icon" onclick="confirmDelete('sale','${saleBaseId}','${esc(s.producto_nombre)}')">🗑</button></td>
+      <td><button class="btn btn-danger btn-sm btn-icon" onclick="confirmDelete('sale','${baseId}','${esc(s.producto_nombre)}')">🗑</button></td>
     </tr>`;
   }).join('');
 }
@@ -2537,7 +2547,11 @@ function renderStockBajo() {
   const stockMinGlobal = parseInt(state.config.stock_minimo_global) || 3;
   const lowStock = state.products
     .filter(p => parseInt(p.stock) <= (parseInt(p.stock_minimo) || stockMinGlobal))
-    .sort((a,b) => parseInt(a.stock) - parseInt(b.stock));
+    .sort((a,b) => {
+      const catCmp = String(a.categoria||'').localeCompare(String(b.categoria||''));
+      if (catCmp !== 0) return catCmp;
+      return parseInt(a.stock) - parseInt(b.stock);
+    });
 
   const tbody = document.getElementById('stockBajoTbody');
   if (lowStock.length === 0) {
@@ -2546,21 +2560,25 @@ function renderStockBajo() {
     </td></tr>`;
     return;
   }
-  tbody.innerHTML = lowStock.map(p => {
+  let rows = '';
+  let lastCat = null;
+  lowStock.forEach(p => {
     const min = parseInt(p.stock_minimo) || stockMinGlobal;
     const stock = parseInt(p.stock);
-    const badge = stock === 0
-      ? `<span class="badge badge-red">AGOTADO</span>`
-      : `<span class="badge badge-amber">BAJO</span>`;
-    return `<tr>
-      <td class="td-name">${esc(p.nombre)}</td>
-      <td><span class="badge badge-blue">${esc(p.categoria)}</span></td>
+    if (p.categoria !== lastCat) {
+      rows += `<tr><td colspan="6" style="padding:10px 16px 7px;background:var(--bg-elevated);font-size:.65rem;letter-spacing:2.5px;text-transform:uppercase;color:var(--text-dim);font-weight:700;border-bottom:1px solid var(--border)">${esc(p.categoria)}</td></tr>`;
+      lastCat = p.categoria;
+    }
+    rows += `<tr>
+      <td class="td-name" style="padding-left:20px">${esc(p.nombre)}</td>
+      <td></td>
       <td style="font-family:var(--font-mono);color:${stock===0?'var(--red-bright)':'var(--amber-bright)'};font-weight:600">${stock}</td>
       <td style="font-family:var(--font-mono);color:var(--text-dim)">${min}</td>
-      <td>${badge}</td>
+      <td>${stock===0?'<span class="badge badge-red">AGOTADO</span>':'<span class="badge badge-amber">BAJO</span>'}</td>
       <td><button class="btn btn-primary btn-sm" onclick="openProductModal('${p.id}')">✏️ Actualizar Stock</button></td>
     </tr>`;
-  }).join('');
+  });
+  tbody.innerHTML = rows;
 }
 
 // ============================================================
