@@ -1802,7 +1802,7 @@ function api(params) {
       const script = document.getElementById(cbName + '_script');
       if (script) script.remove();
       reject(new Error('Timeout — revisa que el Apps Script esté desplegado como "Anyone"'));
-    }, 15000);
+    }, 120000); // <-- 120000 = 2 minutos
 
     window[cbName] = (data) => {
       clearTimeout(timeout);
