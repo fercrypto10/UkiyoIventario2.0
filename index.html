@@ -1730,6 +1730,9 @@ let state = {
   sales: [],
   config: {},
   categories: [],
+  gastos: [],
+  ordenes: [],
+  insumos: [],
   cart: [],
   currentUser: null,
   loaded: false
@@ -2618,9 +2621,7 @@ function renderStockBajo() {
 
   const tbody = document.getElementById('stockBajoTbody');
   if (lowStock.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--text-dim);padding:48px">
-      <div style="font-size:2rem;margin-bottom:10px">✅</div>Todo el inventario está bien abastecido
-    </td></tr>`;
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-dim);padding:48px"><div style="font-size:2rem;margin-bottom:10px">✅</div>Todo el inventario está bien abastecido</td></tr>';
     return;
   }
   let rows = '';
@@ -2996,8 +2997,7 @@ function buildGeminiContext() {
     'Top ventas mes: '+(top.length?top.join(' / '):'sin ventas'),
     'PRODUCTOS:',
     ...prods
-  ].join('
-');
+  ].join('\n');
 }
 
 async function sendChat() {
