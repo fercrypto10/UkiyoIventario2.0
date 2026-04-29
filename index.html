@@ -2959,36 +2959,113 @@ function hideTyping() {
   if (t) t.remove();
 }
 
+const GEMINI_API_KEY = 'AIzaSyBtvgTxS9Zv4Hh4WIN43Rptv5HZtL6iIlg';
+const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=';
+
+function buildContextFromState() {
+  const now = new Date();
+  const mesActual = now.toISOString().slice(0,7);
+  const hoyStr   = now.toISOString().slice(0,10);
+  const cfg = state.config || {};
+  const metaDiaria  = parseFloat(cfg.meta_diaria)  || 150;
+  const metaMensual = parseFloat(cfg.meta_mensual) || 3000;
+  const minG = parseInt(cfg.stock_minimo_global) || 3;
+
+  const ventasMes  = state.sales.filter(s => String(s.fecha).startsWith(mesActual));
+  const ventasHoy  = state.sales.filter(s => String(s.fecha).startsWith(hoyStr));
+  const totalMes   = ventasMes.reduce((a,s) => a+(parseFloat(s.total)||0), 0);
+  const ganMes     = ventasMes.reduce((a,s) => a+(parseFloat(s.ganancia)||0), 0);
+  const totalHoy   = ventasHoy.reduce((a,s) => a+(parseFloat(s.total)||0), 0);
+  const gastosMes  = (state.gastos||[]).filter(g => String(g.fecha).slice(0,7)===mesActual);
+  const totalGastos = gastosMes.reduce((a,g) => a+(parseFloat(g.monto)||0), 0);
+
+  let inv=0, pot=0, stockBajos=[];
+  const prodLines = state.products.map(p => {
+    const s=parseInt(p.stock)||0, co=parseFloat(p.costo)||0, pv=parseFloat(p.precio_venta)||0;
+    const margen = co>0 ? (((pv-co)/co)*100).toFixed(0) : 0;
+    inv += co*s; pot += pv*s;
+    if(s <= (parseInt(p.stock_minimo)||minG)) stockBajos.push(p.nombre+' ('+s+' uds)');
+    return `${p.nombre} | Cat: ${p.categoria} | Precio: $${pv} | Costo: $${co} | Margen: ${margen}% | Stock: ${s}`;
+  });
+
+  const pm={};
+  ventasMes.forEach(s=>{
+    if(!pm[s.producto_nombre])pm[s.producto_nombre]={u:0,gan:0};
+    pm[s.producto_nombre].u+=parseInt(s.cantidad)||0;
+    pm[s.producto_nombre].gan+=parseFloat(s.ganancia)||0;
+  });
+  const topProds = Object.entries(pm).sort((a,b)=>b[1].u-a[1].u).slice(0,5)
+    .map(([n,v])=>`${n}: ${v.u} uds, $${v.gan.toFixed(2)} ganancia`);
+
+  return [
+    `=== FECHA: ${hoyStr} ===`,
+    ``,
+    `--- METAS ---`,
+    `Meta diaria: $${metaDiaria} | Vendido hoy: $${totalHoy.toFixed(2)} (${totalHoy>=metaDiaria?'META ALCANZADA':'Falta $'+(metaDiaria-totalHoy).toFixed(2)})`,
+    `Meta mensual: $${metaMensual} | Vendido este mes: $${totalMes.toFixed(2)} (${((totalMes/metaMensual)*100).toFixed(1)}%)`,
+    ``,
+    `--- FINANZAS MES ACTUAL ---`,
+    `Ingresos: $${totalMes.toFixed(2)}`,
+    `Ganancia bruta: $${ganMes.toFixed(2)}`,
+    `Gastos operativos: $${totalGastos.toFixed(2)}`,
+    `Utilidad neta: $${(ganMes-totalGastos).toFixed(2)}`,
+    ``,
+    `--- INVENTARIO ---`,
+    `Total invertido: $${inv.toFixed(2)} | Valor potencial: $${pot.toFixed(2)} | Ganancia potencial: $${(pot-inv).toFixed(2)}`,
+    `Stock bajo: ${stockBajos.length>0?stockBajos.join(', '):'Ninguno'}`,
+    ``,
+    `--- TOP 5 MÁS VENDIDOS ESTE MES ---`,
+    topProds.length>0 ? topProds.join('\n') : 'Sin ventas este mes',
+    ``,
+    `--- TODOS LOS PRODUCTOS ---`,
+    ...prodLines
+  ].join('\n');
+}
+
 async function sendChat() {
   const input = document.getElementById('chatInput');
   const question = input.value.trim();
   if (!question) return;
 
-  // Hide suggestion chips after first message
   const chips = document.getElementById('suggestionChips');
   if (chips) chips.style.display = 'none';
 
   input.value = '';
   input.style.height = 'auto';
   appendMessage('user', question);
-  chatHistory.push({ role: 'user', text: question });
 
   const btn = document.getElementById('chatSendBtn');
   btn.disabled = true;
   showTyping();
 
   try {
-    const res = await api({ action: 'askGemini', question });
+    const context = buildContextFromState();
+    const systemPrompt = 'Eres un asesor de negocios experto para Ukiyo Garage, una tienda de accesorios streetwear en El Salvador. Analizas datos reales del negocio y das recomendaciones concretas y prácticas. Hablas en español, eres directo y útil. Cuando des estrategias, menciona productos o números concretos del negocio.';
+    const fullPrompt = systemPrompt + '\n\nDATOS ACTUALES DEL NEGOCIO:\n' + context + '\n\nPREGUNTA: ' + question;
+
+    const res = await fetch(GEMINI_URL + GEMINI_API_KEY, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
+        generationConfig: { temperature: 0.7, maxOutputTokens: 1024 }
+      })
+    });
+
+    const data = await res.json();
     hideTyping();
-    if (res && res.success) {
-      appendMessage('ai', res.response);
-      chatHistory.push({ role: 'ai', text: res.response });
-    } else {
-      appendMessage('ai', '❌ Error: ' + (res?.error || 'Sin respuesta del servidor'));
+
+    if (data.error) {
+      appendMessage('ai', '❌ Error Gemini: ' + data.error.message);
+      return;
     }
+
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Sin respuesta';
+    appendMessage('ai', text);
+
   } catch(e) {
     hideTyping();
-    appendMessage('ai', '❌ Error de conexión: ' + e.message);
+    appendMessage('ai', '❌ Error: ' + e.message);
   } finally {
     btn.disabled = false;
     input.focus();
