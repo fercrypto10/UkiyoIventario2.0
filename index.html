@@ -2960,46 +2960,6 @@ function hideTyping() {
   if (t) t.remove();
 }
 
-const GEMINI_KEY = 'AIzaSyAcPLQ2aKaBNcSrVpl4X9K9kMQfjz6KvNY';
-
-function buildGeminiContext() {
-  const now = new Date();
-  const mes = now.toISOString().slice(0,7);
-  const hoy = now.toISOString().slice(0,10);
-  const cfg = state.config || {};
-  const minG = parseInt(cfg.stock_minimo_global)||3;
-  const vMes = state.sales.filter(s=>String(s.fecha).startsWith(mes));
-  const vHoy = state.sales.filter(s=>String(s.fecha).startsWith(hoy));
-  const tMes = vMes.reduce((a,s)=>a+(parseFloat(s.total)||0),0);
-  const gMes = vMes.reduce((a,s)=>a+(parseFloat(s.ganancia)||0),0);
-  const tHoy = vHoy.reduce((a,s)=>a+(parseFloat(s.total)||0),0);
-  const gast = (state.gastos||[]).filter(g=>String(g.fecha).slice(0,7)===mes).reduce((a,g)=>a+(parseFloat(g.monto)||0),0);
-  const meta_d = parseFloat(cfg.meta_diaria)||150;
-  const meta_m = parseFloat(cfg.meta_mensual)||3000;
-  let inv=0,pot=0,bajos=[];
-  const prods = state.products.map(p=>{
-    const s=parseInt(p.stock)||0,co=parseFloat(p.costo)||0,pv=parseFloat(p.precio_venta)||0;
-    const m=co>0?(((pv-co)/co)*100).toFixed(0):0;
-    inv+=co*s; pot+=pv*s;
-    if(s<=(parseInt(p.stock_minimo)||minG)) bajos.push(p.nombre+' ('+s+')');
-    return p.nombre+' | '+p.categoria+' | $'+pv+' | costo $'+co+' | margen '+m+'% | stock '+s;
-  });
-  const pm={};
-  vMes.forEach(s=>{if(!pm[s.producto_nombre])pm[s.producto_nombre]={u:0,g:0};pm[s.producto_nombre].u+=parseInt(s.cantidad)||0;pm[s.producto_nombre].g+=parseFloat(s.ganancia)||0;});
-  const top=Object.entries(pm).sort((a,b)=>b[1].u-a[1].u).slice(0,5).map(([n,v])=>n+': '+v.u+' uds, $'+v.g.toFixed(2));
-  return [
-    'FECHA: '+hoy,
-    'Meta diaria $'+meta_d+' | Hoy: $'+tHoy.toFixed(2)+' | '+(tHoy>=meta_d?'META OK':'Falta $'+(meta_d-tHoy).toFixed(2)),
-    'Meta mensual $'+meta_m+' | Mes: $'+tMes.toFixed(2)+' ('+((tMes/meta_m)*100).toFixed(1)+'%)',
-    'Ganancia mes: $'+gMes.toFixed(2)+' | Gastos: $'+gast.toFixed(2)+' | Utilidad: $'+(gMes-gast).toFixed(2),
-    'Inventario invertido: $'+inv.toFixed(2)+' | Potencial: $'+pot.toFixed(2),
-    'Stock bajo: '+(bajos.length?bajos.join(', '):'ninguno'),
-    'Top ventas mes: '+(top.length?top.join(' / '):'sin ventas'),
-    'PRODUCTOS:',
-    ...prods
-  ].join('\n');
-}
-
 async function sendChat() {
   const input = document.getElementById('chatInput');
   const question = input.value.trim();
@@ -3017,25 +2977,13 @@ async function sendChat() {
   showTyping();
 
   try {
-    const ctx = buildGeminiContext();
-    const prompt = 'Eres un asesor de negocios para Ukiyo Garage, tienda streetwear en El Salvador. Responde en español, sé concreto y usa los datos reales del negocio.\n\nDATOS:\n' + ctx + '\n\nPREGUNTA: ' + question;
-
-    const resp = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + GEMINI_KEY, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.7, maxOutputTokens: 1024 }
-      })
-    });
-
-    const data = await resp.json();
+    const res = await api({ action: 'askGemini', question });
     hideTyping();
-
-    if (data.error) { appendMessage('ai', '❌ ' + data.error.message); return; }
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Sin respuesta';
-    appendMessage('ai', text);
-
+    if (res && res.success) {
+      appendMessage('ai', res.response);
+    } else {
+      appendMessage('ai', '❌ Error: ' + (res?.error || 'Sin respuesta'));
+    }
   } catch(e) {
     hideTyping();
     appendMessage('ai', '❌ Error: ' + e.message);
