@@ -3974,6 +3974,82 @@ async function saveInsumo(){
     toast('Insumo guardado ✓','success');closeModal('modalInsumo');await loadAll();
   }catch(e){toast('Error: '+e.message,'error');}finally{hideLoading();}
 }
+
+// ============================================================
+// LOADING / TOAST
+// ============================================================
+let loadingEl = null;
+function showLoading() {
+  if (loadingEl) return;
+  loadingEl = document.createElement('div');
+  loadingEl.className = 'loading-overlay';
+  loadingEl.innerHTML = '<div class="spinner"></div>';
+  document.body.appendChild(loadingEl);
+}
+function hideLoading() {
+  if (loadingEl) { loadingEl.remove(); loadingEl = null; }
+}
+function toast(msg, type='info') {
+  const t = document.createElement('div');
+  t.className = 'toast toast-' + type;
+  t.textContent = msg;
+  const container = document.getElementById('toastContainer');
+  if (container) container.appendChild(t);
+  setTimeout(() => t.remove(), 3500);
+}
+
+// ============================================================
+// UTILITIES
+// ============================================================
+function fmt(n) {
+  const num = parseFloat(n) || 0;
+  return '$' + num.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+function fmtDate(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('es-SV', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
+}
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ============================================================
+// SYNC / REPAIR / REACTIVAR
+// ============================================================
+async function syncData() {
+  const btn = document.getElementById('syncBtn');
+  if (btn) { btn.textContent = '↻ Sincronizando...'; btn.disabled = true; }
+  try { await loadAll(); }
+  finally { if (btn) { btn.textContent = '↺ Sincronizar'; btn.disabled = false; } }
+}
+
+async function repairDB() {
+  if (!confirm('¿Reparar las hojas del Google Sheet?')) return;
+  showLoading();
+  try {
+    await api({ action: 'repair' });
+    toast('Base de datos reparada ✓', 'success');
+    await loadAll();
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+  finally { hideLoading(); }
+}
+
+async function reactivarProductos() {
+  if (!confirm('¿Reactivar todos los productos inactivos?')) return;
+  showLoading();
+  try {
+    await api({ action: 'reactivate' });
+    toast('Productos reactivados ✓', 'success');
+    await loadAll();
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+  finally { hideLoading(); }
+}
+
+// ============================================================
+// SESSION CHECK
+// ============================================================
+window.addEventListener('DOMContentLoaded', () => { checkSession(); });
+
 </script>
 </body>
 </html>
