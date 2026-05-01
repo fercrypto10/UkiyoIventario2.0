@@ -4328,17 +4328,11 @@ function renderPkgGrid() {
 
 function addToPkg(prodId) {
   const p = state.products.find(x => x.id === prodId); if (!p) return;
-  const cat = state.categories.find(c => c.nombre === p.categoria);
+  // In packages we don't care about tallas — use total stock
   const available = parseInt(p.stock) || 0;
   const inPkg = pkgCart.filter(i => i.producto_id === prodId).reduce((a,i) => a+i.cantidad, 0);
   if (inPkg >= available) { toast('Stock máximo alcanzado para este producto', 'error'); return; }
-  // Handle tallas
-  if (cat && String(cat.tiene_tallas).toLowerCase() === 'true') {
-    const tallas = getTallas(p);
-    const tallaKeys = Object.keys(tallas).filter(t => (parseInt(tallas[t])||0) > 0);
-    if (tallaKeys.length > 0) { openPkgTallaModal(p); return; }
-  }
-  const ex = pkgCart.find(i => i.producto_id === prodId && !i.talla);
+  const ex = pkgCart.find(i => i.producto_id === prodId);
   if (ex) ex.cantidad++;
   else pkgCart.push({ producto_id:prodId, nombre:p.nombre, costo:parseFloat(p.costo)||0, precio_ref:parseFloat(p.precio_venta)||0, cantidad:1, talla:null });
   updatePkgPanel();
