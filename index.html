@@ -3975,6 +3975,156 @@ async function saveInsumo(){
   }catch(e){toast('Error: '+e.message,'error');}finally{hideLoading();}
 }
 
+
+// ============================================================
+// FINANZAS
+// ============================================================
+function renderFinanzas() {
+  const now = new Date();
+  const curMes = now.toISOString().slice(0,7);
+  const filtro = document.getElementById('finMesFiltro');
+  if (filtro && !filtro.value) filtro.value = curMes;
+  const mes = filtro?.value || curMes;
+  const catF = document.getElementById('finCatFiltro')?.value || '';
+
+  let gastosMes = (state.gastos||[]).filter(g => String(g.fecha).slice(0,7) === mes);
+  if (catF) gastosMes = gastosMes.filter(g => g.categoria === catF);
+  const totalGastos = gastosMes.reduce((a,g) => a+(parseFloat(g.monto)||0), 0);
+
+  const ventasMes = state.sales.filter(s => String(s.fecha).slice(0,7) === mes);
+  const ingresos = ventasMes.reduce((a,s) => a+(parseFloat(s.total)||0), 0);
+  const gBruta = ventasMes.reduce((a,s) => a+(parseFloat(s.ganancia)||0), 0);
+  const utilidad = gBruta - totalGastos;
+
+  const el = (id) => document.getElementById(id);
+  if(el('finIngresosMes')) el('finIngresosMes').textContent = fmt(ingresos);
+  if(el('finGastosMes')) el('finGastosMes').textContent = fmt(totalGastos);
+  if(el('finGananciaBruta')) el('finGananciaBruta').textContent = fmt(gBruta);
+  if(el('finUtilidadMes')) {
+    el('finUtilidadMes').textContent = fmt(utilidad);
+    el('finUtilidadMes').style.color = utilidad >= 0 ? 'var(--green-bright)' : 'var(--red-bright)';
+  }
+
+  const tbody = document.getElementById('gastosTbody');
+  if (!tbody) return;
+  const sorted = [...gastosMes].sort((a,b) => new Date(b.fecha) - new Date(a.fecha));
+  tbody.innerHTML = sorted.length === 0
+    ? '<tr><td colspan="5" style="text-align:center;color:var(--text-dim);padding:32px">Sin gastos en este período</td></tr>'
+    : sorted.map(g => `<tr>
+        <td style="font-size:.82rem">${fmtDate(g.fecha)}</td>
+        <td class="td-name">${esc(g.descripcion)}</td>
+        <td><span class="badge badge-blue">${esc(g.categoria)}</span></td>
+        <td class="td-money" style="color:var(--red-bright)">${fmt(g.monto)}</td>
+        <td><div class="td-actions">
+          <button class="btn btn-ghost btn-sm btn-icon" onclick="openGastoModal('${g.id}')">✏️</button>
+          <button class="btn btn-danger btn-sm btn-icon" onclick="confirmDelete('gasto','${g.id}','${esc(g.descripcion)}')">🗑</button>
+        </div></td>
+      </tr>`).join('');
+}
+
+function openGastoModal(id) {
+  const today = new Date().toISOString().split('T')[0];
+  if (id) {
+    const g = (state.gastos||[]).find(x => x.id === id); if (!g) return;
+    document.getElementById('modalGastoTitle').textContent = 'EDITAR GASTO';
+    document.getElementById('gastoId').value = g.id;
+    document.getElementById('gastoDesc').value = g.descripcion;
+    document.getElementById('gastoCat').value = g.categoria;
+    document.getElementById('gastoMonto').value = g.monto;
+    document.getElementById('gastoFecha').value = String(g.fecha).slice(0,10);
+    document.getElementById('gastoNotas').value = g.notas || '';
+  } else {
+    document.getElementById('modalGastoTitle').textContent = 'NUEVO GASTO';
+    document.getElementById('gastoId').value = '';
+    document.getElementById('gastoDesc').value = '';
+    document.getElementById('gastoMonto').value = '';
+    document.getElementById('gastoFecha').value = today;
+    document.getElementById('gastoNotas').value = '';
+  }
+  document.getElementById('modalGasto').classList.add('open');
+}
+
+async function saveGasto() {
+  const desc = document.getElementById('gastoDesc').value.trim();
+  const monto = parseFloat(document.getElementById('gastoMonto').value) || 0;
+  const fecha = document.getElementById('gastoFecha').value;
+  if (!desc || !monto || !fecha) { toast('Completa descripción, monto y fecha', 'error'); return; }
+  showLoading();
+  try {
+    await api({ action:'saveGasto', id:document.getElementById('gastoId').value, descripcion:desc, categoria:document.getElementById('gastoCat').value, monto, fecha, notas:document.getElementById('gastoNotas').value });
+    toast('Gasto guardado ✓', 'success');
+    closeModal('modalGasto');
+    await loadAll();
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+  finally { hideLoading(); }
+}
+
+// ============================================================
+// CONFIGURACIÓN
+// ============================================================
+function renderConfig() {
+  const cfg = state.config;
+  const el = (id) => document.getElementById(id);
+  if(el('cfgMetaDiaria')) el('cfgMetaDiaria').value = cfg.meta_diaria || 150;
+  if(el('cfgMetaMensual')) el('cfgMetaMensual').value = cfg.meta_mensual || 3000;
+  if(el('cfgStockMin')) el('cfgStockMin').value = cfg.stock_minimo_global || 3;
+  if(el('cfgPctGanancia')) el('cfgPctGanancia').value = cfg.porcentaje_ganancia_default || 40;
+
+  const tbody = document.getElementById('catsTbody'); if (!tbody) return;
+  tbody.innerHTML = state.categories.map(c =>
+    `<tr>
+      <td class="td-name">${esc(c.nombre)}</td>
+      <td>${String(c.tiene_tallas).toLowerCase()==='true'?'<span class="badge badge-blue">Con tallas</span>':'<span class="badge badge-gray">Sin tallas</span>'}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="confirmDelete('cat','${esc(c.nombre)}','${esc(c.nombre)}')">🗑</button></td>
+    </tr>`).join('');
+}
+
+async function saveConfig() {
+  showLoading();
+  try {
+    await api({ action:'saveConfig', meta_diaria:document.getElementById('cfgMetaDiaria').value, meta_mensual:document.getElementById('cfgMetaMensual').value, stock_minimo_global:document.getElementById('cfgStockMin').value, porcentaje_ganancia_default:document.getElementById('cfgPctGanancia').value });
+    toast('Configuración guardada ✓', 'success');
+    await loadAll();
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+  finally { hideLoading(); }
+}
+
+async function addCategory() {
+  const name = document.getElementById('newCatName').value.trim();
+  if (!name) { toast('Escribe un nombre', 'error'); return; }
+  showLoading();
+  try {
+    await api({ action:'saveCategory', nombre:name, tiene_tallas:document.getElementById('newCatTallas').value });
+    document.getElementById('newCatName').value = '';
+    toast('Categoría agregada ✓', 'success');
+    await loadAll();
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
+  finally { hideLoading(); }
+}
+
+// ============================================================
+// CREDENTIALS / USERS (if page exists)
+// ============================================================
+function renderUsers() {
+  const tbody = document.getElementById('usersTbody'); if (!tbody) return;
+  const creds = getCredentials();
+  tbody.innerHTML = creds.map((u,i) => `<tr>
+    <td class="td-name">${esc(u.name)}</td>
+    <td>${esc(u.user)}</td>
+    <td><div class="td-actions">
+      <button class="btn btn-ghost btn-sm" onclick="editUser(${i})">✏️</button>
+    </div></td>
+  </tr>`).join('');
+}
+function saveCredentials() {}
+function pushUsersToSheet() {}
+function addUser() {}
+function deleteUser() {}
+function updateUser() {}
+function editUser() {}
+function testDelete() {}
+function testUserSync() {}
+
 // ============================================================
 // LOADING / TOAST
 // ============================================================
