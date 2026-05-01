@@ -1989,6 +1989,27 @@ Puedo ayudarte con estrategias de venta, análisis de inventario, recomendacione
   </div>
 </div>
 
+
+<!-- MODAL TALLAS DEL PAQUETE -->
+<div class="modal-overlay" id="modalPkgTallas">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <div class="modal-title">TALLAS DEL PAQUETE</div>
+      <button class="modal-close" onclick="closeModal('modalPkgTallas')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="color:var(--text-secondary);font-size:.88rem;margin-bottom:16px">
+        Selecciona la talla para cada producto con tallas del paquete:
+      </p>
+      <div id="pkgTallasSelectors"></div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal('modalPkgTallas')">Cancelar</button>
+        <button class="btn btn-success" onclick="confirmarPaqueteConTallas()">✓ Agregar al carrito</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST CONTAINER -->
 <div id="toastContainer"></div>
 
@@ -3447,20 +3468,82 @@ function aplicarPromoAlCarrito(promoId) {
   else if (p.tipo==='2x1') toast('2×1 activo — agrega 2 unidades y la segunda sale gratis','info');
 }
 
+let _pendingPaquete = null;
+
 function agregarPaqueteAlCarrito(p) {
   let items=[]; try{items=typeof p.items==='string'?JSON.parse(p.items):(p.items||[]);}catch(e){}
   if (!items.length){toast('El paquete no tiene productos','error');return;}
-  for (const id of items){const prod=state.products.find(x=>x.id===id);if(!prod||(parseInt(prod.stock)||0)<1){toast('Stock insuficiente para el paquete','error');return;}}
+  for (const id of items){
+    const prod=state.products.find(x=>x.id===id);
+    if(!prod||(parseInt(prod.stock)||0)<1){toast('Stock insuficiente para el paquete','error');return;}
+  }
+  // Check which items have tallas
+  const itemsConTallas=items.filter(id=>{
+    const prod=state.products.find(x=>x.id===id);if(!prod)return false;
+    const cat=state.categories.find(c=>c.nombre===prod.categoria);
+    if(!cat||String(cat.tiene_tallas).toLowerCase()!=='true')return false;
+    return Object.keys(getTallas(prod)).filter(t=>(parseInt(getTallas(prod)[t])||0)>0).length>0;
+  });
+  if(itemsConTallas.length>0){
+    _pendingPaquete={p,items,itemsConTallas};
+    openPkgTallasModal(p,items,itemsConTallas);
+  } else {
+    _addPaqueteToCart(p,items,{});
+  }
+}
+
+function openPkgTallasModal(p,allItems,itemsConTallas){
+  const con=document.getElementById('pkgTallasSelectors');if(!con)return;
+  con.innerHTML=itemsConTallas.map(id=>{
+    const prod=state.products.find(x=>x.id===id);if(!prod)return'';
+    const tallas=getTallas(prod);
+    const keys=Object.keys(tallas).filter(t=>(parseInt(tallas[t])||0)>0);
+    return`<div style="margin-bottom:16px">
+      <div style="font-weight:600;color:var(--text-primary);margin-bottom:8px;font-size:.9rem">${esc(prod.nombre)}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${keys.map(t=>`<button class="btn btn-ghost btn-sm pkg-talla-sel" data-prod="${prod.id}" data-talla="${t}"
+          onclick="selectPkgTalla('${prod.id}','${t}',this)"
+          style="font-family:var(--font-mono);font-weight:600;min-width:52px;flex-direction:column;gap:2px">
+          <span>${t}</span><span style="font-size:.65rem;color:var(--text-dim)">${tallas[t]} uds</span>
+        </button>`).join('')}
+      </div>
+      <input type="hidden" id="pkgTallaSelected_${prod.id}" value="">
+    </div>`;
+  }).join('');
+  document.getElementById('modalPkgTallas').classList.add('open');
+}
+
+function selectPkgTalla(prodId,talla,btn){
+  document.querySelectorAll('.pkg-talla-sel[data-prod="'+prodId+'"]').forEach(b=>{
+    b.classList.remove('btn-primary');b.classList.add('btn-ghost');
+  });
+  btn.classList.remove('btn-ghost');btn.classList.add('btn-primary');
+  const h=document.getElementById('pkgTallaSelected_'+prodId);if(h)h.value=talla;
+}
+
+function confirmarPaqueteConTallas(){
+  if(!_pendingPaquete)return;
+  const {p,items,itemsConTallas}=_pendingPaquete;
+  const tallasSeleccionadas={};
+  for(const id of itemsConTallas){
+    const h=document.getElementById('pkgTallaSelected_'+id);
+    if(!h||!h.value){const prod=state.products.find(x=>x.id===id);toast('Selecciona la talla para: '+(prod?.nombre||id),'error');return;}
+    tallasSeleccionadas[id]=h.value;
+  }
+  closeModal('modalPkgTallas');
+  _addPaqueteToCart(p,items,tallasSeleccionadas);
+  _pendingPaquete=null;
+}
+
+function _addPaqueteToCart(p,items,tallasSeleccionadas){
   const precio=parseFloat(p.precio)||0;
   const costoT=items.reduce((a,id)=>{const prod=state.products.find(x=>x.id===id);return a+(prod?parseFloat(prod.costo)||0:0);},0);
-  // Apply integrated envio if any
-  const envioVal=p.envio_integrado!==null&&p.envio_integrado!==''&&p.envio_integrado!==undefined?parseFloat(p.envio_integrado):null;
-  if (envioVal!==null && !state.envioActivo) {
-    state._paqueteEnvio={costo:envioVal,desc:'Envío incluido'};
-  }
-  cart.push({producto_id:p.id,nombre:p.label||p.nombre,precio_unitario:precio,costo_unitario:costoT,cantidad:1,talla:null,es_paquete:true,paquete_items:items,promo_id:p.id,envio_integrado:envioVal});
+  const envioVal=(p.envio_integrado!==null&&p.envio_integrado!==''&&p.envio_integrado!==undefined)?parseFloat(p.envio_integrado):null;
+  if(envioVal!==null&&!state.envioActivo)state._paqueteEnvio={costo:envioVal,desc:'Envío incluido'};
+  const paqueteItemsTallas=items.map(id=>({id,talla:tallasSeleccionadas[id]||null}));
+  cart.push({producto_id:p.id,nombre:p.label||p.nombre,precio_unitario:precio,costo_unitario:costoT,cantidad:1,talla:null,es_paquete:true,paquete_items:items,paquete_items_tallas:paqueteItemsTallas,promo_id:p.id,envio_integrado:envioVal});
   renderCart();
-  toast('Paquete agregado ✓','success');
+  toast('Paquete agregado al carrito ✓','success');
 }
 
 // ---- Override addToCart to apply descuento + integrated envio ----
@@ -3575,12 +3658,26 @@ async function confirmSale() {
     else if(state._paqueteEnvio){envio=state._paqueteEnvio.costo||0;envioDesc=state._paqueteEnvio.desc||'';}
   }
   for (const item of cart) {
-    if(item.es_paquete){for(const id of(item.paquete_items||[])){const p=state.products.find(x=>x.id===id);if(!p||(parseInt(p.stock)||0)<1){toast('Stock insuficiente para el paquete','error');return;}}}
+    if(item.es_paquete){
+      const itemsConTalla = item.paquete_items_tallas || (item.paquete_items||[]).map(id=>({id,talla:null}));
+      for(const pi of itemsConTalla){
+        const p=state.products.find(x=>x.id===pi.id);if(!p){toast('Producto del paquete no encontrado','error');return;}
+        if(pi.talla){const tallas=getTallas(p);const av=parseInt(tallas[pi.talla])||0;if(av<1){toast('Sin stock en talla '+pi.talla+' para '+p.nombre,'error');return;}}
+        else{if((parseInt(p.stock)||0)<1){toast('Stock insuficiente para '+p.nombre,'error');return;}}
+      }
+    }
     else{const p=state.products.find(x=>x.id===item.producto_id);if(!p){toast('Producto no encontrado: '+item.nombre,'error');return;}
       const av=item.talla?(parseInt(getTallas(p)[item.talla])||0):(parseInt(p.stock)||0);
       if(item.cantidad>av){toast('Stock insuficiente: '+item.nombre,'error');return;}}
   }
-  const data={action:'recordSale',items:JSON.stringify(cart),metodo_pago:document.getElementById('payMethod').value,notas:document.getElementById('saleNotes').value,registrado_por:state.currentUser?.user||'Ukiyo1',fecha:new Date().toISOString(),envio_costo:envio,envio_desc:envioDesc};
+  // Expand paquete_items_tallas into the cart data sent to backend
+  const cartForSale = cart.map(item => {
+    if (item.es_paquete && item.paquete_items_tallas) {
+      return {...item, paquete_items: item.paquete_items_tallas.map(x=>x.id+'|'+(x.talla||''))};
+    }
+    return item;
+  });
+  const data={action:'recordSale',items:JSON.stringify(cartForSale),metodo_pago:document.getElementById('payMethod').value,notas:document.getElementById('saleNotes').value,registrado_por:state.currentUser?.user||'Ukiyo1',fecha:new Date().toISOString(),envio_costo:envio,envio_desc:envioDesc};
   showLoading();
   try{await api(data);toast('Venta registrada ✓','success');clearCart();state.envioActivo=null;state._descEnvio=null;state._paqueteEnvio=null;await loadAll();navigate('dashboard');}
   catch(e){toast('Error: '+e.message,'error');}finally{hideLoading();}
