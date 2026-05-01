@@ -961,6 +961,10 @@ tr:hover td { background: var(--bg-elevated); color: var(--text-primary); }
 .envio-btn:hover{border-color:var(--blue-main)}
 .envio-btn.active{background:var(--green-dim);border-color:var(--green-main);color:var(--green-bright)}
 @media(max-width:900px){.promo-layout{grid-template-columns:1fr}.promo-type-grid{grid-template-columns:repeat(2,1fr)}}
+
+/* PAQUETE BUILDER */
+.pkg-envio-btn { transition: all var(--transition); }
+.pkg-envio-btn.active { background:var(--green-dim);border-color:var(--green-main);color:var(--green-bright); }
 </style>
 </head>
 <body>
@@ -1545,9 +1549,18 @@ Puedo ayudarte con estrategias de venta, análisis de inventario, recomendacione
       <!-- ===================== PROMOCIONES ===================== -->
       <div class="page" id="page-promociones">
         <div class="page-header">
-          <div><div class="page-title">PROMOCIONES</div><div class="page-subtitle">Crea y gestiona campañas de descuentos, paquetes y envíos</div></div>
-          <button class="btn btn-primary" onclick="openPromoModal()">+ Nueva Campaña</button>
+          <div><div class="page-title">PROMOCIONES</div><div class="page-subtitle">Campañas, paquetes y envíos</div></div>
+          <div class="page-actions">
+            <div style="display:flex;gap:2px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius);padding:3px">
+              <button class="btn btn-primary btn-sm" id="tabCampanas" onclick="switchPromoTab('campanas')" style="border-radius:6px">🏷️ Campañas</button>
+              <button class="btn btn-ghost btn-sm" id="tabPaquetes" onclick="switchPromoTab('paquetes')" style="border-radius:6px">📦 Paquetes</button>
+            </div>
+            <button class="btn btn-primary" id="btnNuevaCampana" onclick="openPromoModal()">+ Nueva Campaña</button>
+          </div>
         </div>
+
+        <!-- TAB CAMPAÑAS -->
+        <div id="tabCampanasContent">
         <div class="promo-layout">
           <div class="promo-sidebar">
             <div class="promo-sidebar-header">
@@ -1562,6 +1575,69 @@ Puedo ayudarte con estrategias de venta, análisis de inventario, recomendacione
             <div class="promo-empty-detail"><div><div style="font-size:2.5rem;margin-bottom:12px">🏷️</div><p>Selecciona una campaña<br>o crea una nueva</p></div></div>
           </div>
         </div>
+        </div><!-- end tabCampanasContent -->
+
+        <!-- TAB PAQUETES -->
+        <div id="tabPaquetesContent" style="display:none">
+          <div class="sale-layout">
+            <div>
+              <div class="filter-bar">
+                <div class="search-wrap">
+                  <span class="icon">🔍</span>
+                  <input type="text" class="search-input" id="pkgSearch" placeholder="Buscar producto..." oninput="renderPkgGrid()">
+                </div>
+                <select class="filter-select" id="pkgCatFilter" onchange="renderPkgGrid()">
+                  <option value="">Todas las categorías</option>
+                </select>
+              </div>
+              <div class="product-grid" id="pkgProductGrid"></div>
+            </div>
+            <div class="cart-panel">
+              <div class="cart-title">📦 NUEVO PAQUETE</div>
+              <div class="cart-items" id="pkgItems">
+                <div class="empty-state" style="padding:20px 0"><p style="font-size:.8rem">Agrega productos</p></div>
+              </div>
+              <div class="cart-separator"></div>
+              <div class="cart-total-row"><span>Costo productos</span><span class="mono" id="pkgCostoProds">$0.00</span></div>
+              <div style="margin:10px 0 6px">
+                <div style="font-size:.68rem;letter-spacing:2px;text-transform:uppercase;color:var(--text-dim);margin-bottom:6px">🚚 Envío incluido</div>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center" id="pkgEnvioBtns">
+                  <button class="btn btn-ghost btn-sm pkg-envio-btn active" onclick="setPkgEnvio(null,this)">Sin envío</button>
+                  <button class="btn btn-ghost btn-sm pkg-envio-btn" onclick="setPkgEnvio(0,this)">🎁 Gratis</button>
+                  <button class="btn btn-ghost btn-sm pkg-envio-btn" onclick="setPkgEnvio(1.99,this)">$1.99</button>
+                  <button class="btn btn-ghost btn-sm pkg-envio-btn" onclick="setPkgEnvio(2.50,this)">$2.50</button>
+                  <button class="btn btn-ghost btn-sm pkg-envio-btn" onclick="setPkgEnvio(4,this)">$4.00</button>
+                  <input type="number" class="form-input" id="pkgEnvioCustom" placeholder="Otro" step="0.01" min="0" style="width:72px;padding:5px 8px;font-size:.8rem" oninput="setPkgEnvio(parseFloat(this.value)||0,null,true)">
+                </div>
+              </div>
+              <div class="cart-total-row" id="pkgEnvioRow" style="display:none;color:var(--green-bright)">
+                <span id="pkgEnvioLabel">Envío</span><span class="mono" id="pkgEnvioMonto">$0.00</span>
+              </div>
+              <div class="cart-separator"></div>
+              <div class="cart-total-row"><span style="color:var(--text-dim)">Costo total</span><span class="mono" style="color:var(--red-bright)" id="pkgCostoTotal">$0.00</span></div>
+              <div class="cart-total-row main">
+                <span>Precio de venta</span>
+                <input type="number" class="form-input" id="pkgPrecioVenta" placeholder="0.00" step="0.01" style="width:100px;padding:6px 8px;text-align:right;font-family:var(--font-mono)" oninput="updatePkgSummary()">
+              </div>
+              <div class="cart-total-row" id="pkgGananciaRow" style="display:none">
+                <span>Ganancia</span><span class="mono" id="pkgGananciaMonto" style="color:var(--green-bright)">$0.00</span>
+              </div>
+              <div id="pkgMargenRow" style="font-size:.75rem;text-align:right;color:var(--text-dim);margin-bottom:8px"></div>
+              <div class="cart-separator"></div>
+              <div class="form-group" style="margin-bottom:12px">
+                <label class="form-label">Nombre del paquete *</label>
+                <input type="text" class="form-input" id="pkgNombre" placeholder="ej. Paquete Starter, Kit Gorras...">
+              </div>
+              <button class="btn btn-success" style="width:100%" onclick="crearPaquete()">✓ CREAR PAQUETE ACTIVO</button>
+              <button class="btn btn-ghost" style="width:100%;margin-top:8px" onclick="clearPkg()">✕ Limpiar</button>
+              <div style="margin-top:20px;border-top:1px solid var(--border);padding-top:14px">
+                <div style="font-size:.65rem;letter-spacing:2px;text-transform:uppercase;color:var(--text-dim);margin-bottom:10px">PAQUETES CREADOS</div>
+                <div id="pkgExistingList"></div>
+              </div>
+            </div>
+          </div>
+        </div><!-- end tabPaquetesContent -->
+
       </div>
 
     </main>
@@ -2097,7 +2173,7 @@ function navigate(page) {
   document.getElementById('page-' + page).classList.add('active');
   document.getElementById('nav-' + page).classList.add('active');
   if (page === 'ventas') { renderSaleProducts(); renderActivePromosBar(); }
-  if (page === 'promociones') renderPromociones();
+  if (page === 'promociones') { renderPromociones(); switchPromoTab('campanas'); }
   if (page === 'asesor') { document.getElementById('chatInput')?.focus(); }
 }
 
@@ -3242,6 +3318,7 @@ function renderPromociones() {
     </div>`;
   }).join('');
   renderActivePromosBar();
+  renderPkgExisting();
 }
 
 function selectPromo(id) {
@@ -4193,6 +4270,257 @@ async function reactivarProductos() {
     await loadAll();
   } catch(e) { toast('Error: ' + e.message, 'error'); }
   finally { hideLoading(); }
+}
+
+
+// ============================================================
+// PACKAGE BUILDER
+// ============================================================
+let pkgCart = [];
+let pkgEnvio = null; // null = no envio, number = costo
+
+function switchPromoTab(tab) {
+  const isCampanas = tab === 'campanas';
+  document.getElementById('tabCampanasContent').style.display = isCampanas ? 'block' : 'none';
+  document.getElementById('tabPaquetesContent').style.display = isCampanas ? 'none' : 'block';
+  document.getElementById('btnNuevaCampana').style.display = isCampanas ? 'block' : 'none';
+  document.getElementById('tabCampanas').className = isCampanas ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm';
+  document.getElementById('tabPaquetes').className = isCampanas ? 'btn btn-ghost btn-sm' : 'btn btn-primary btn-sm';
+  // Style fix for border-radius
+  document.getElementById('tabCampanas').style.borderRadius = '6px';
+  document.getElementById('tabPaquetes').style.borderRadius = '6px';
+  if (!isCampanas) {
+    renderPkgGrid();
+    renderPkgExisting();
+    // Populate category filter
+    const sel = document.getElementById('pkgCatFilter');
+    if (sel) {
+      const opts = state.categories.map(c => `<option value="${esc(c.nombre)}">${esc(c.nombre)}</option>`).join('');
+      sel.innerHTML = '<option value="">Todas las categorías</option>' + opts;
+    }
+  }
+}
+
+function renderPkgGrid() {
+  const search = (document.getElementById('pkgSearch')?.value || '').toLowerCase();
+  const cat = document.getElementById('pkgCatFilter')?.value || '';
+  const grid = document.getElementById('pkgProductGrid'); if (!grid) return;
+  const prods = state.products.filter(p => {
+    const ms = !search || p.nombre.toLowerCase().includes(search) || p.categoria.toLowerCase().includes(search);
+    const mc = !cat || p.categoria === cat;
+    return ms && mc;
+  });
+  if (!prods.length) { grid.innerHTML = '<div class="empty-state"><div class="icon">📦</div><p>Sin productos</p></div>'; return; }
+  grid.innerHTML = prods.map(p => {
+    const inPkg = pkgCart.filter(i => i.producto_id === p.id).reduce((a,i) => a+i.cantidad, 0);
+    const stockOk = parseInt(p.stock) > 0;
+    return `<div class="product-card ${!stockOk?'':'hover-card'}" onclick="${stockOk?`addToPkg('${p.id}')`:''}" style="${!stockOk?'opacity:.45;cursor:not-allowed':'cursor:pointer'}">
+      <div class="cat">${esc(p.categoria)}</div>
+      <div class="pname">${esc(p.nombre)}</div>
+      <div class="price">${fmt(p.precio_venta)}</div>
+      <div class="stock-info" style="display:flex;justify-content:space-between;align-items:center">
+        <span style="color:var(--text-dim)">Costo: ${fmt(p.costo)}</span>
+        ${inPkg > 0 ? `<span class="badge badge-blue" style="font-size:.65rem">+${inPkg} en pkg</span>` : `<span style="color:var(--text-dim)">Stock: ${p.stock}</span>`}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function addToPkg(prodId) {
+  const p = state.products.find(x => x.id === prodId); if (!p) return;
+  const cat = state.categories.find(c => c.nombre === p.categoria);
+  const available = parseInt(p.stock) || 0;
+  const inPkg = pkgCart.filter(i => i.producto_id === prodId).reduce((a,i) => a+i.cantidad, 0);
+  if (inPkg >= available) { toast('Stock máximo alcanzado para este producto', 'error'); return; }
+  // Handle tallas
+  if (cat && String(cat.tiene_tallas).toLowerCase() === 'true') {
+    const tallas = getTallas(p);
+    const tallaKeys = Object.keys(tallas).filter(t => (parseInt(tallas[t])||0) > 0);
+    if (tallaKeys.length > 0) { openPkgTallaModal(p); return; }
+  }
+  const ex = pkgCart.find(i => i.producto_id === prodId && !i.talla);
+  if (ex) ex.cantidad++;
+  else pkgCart.push({ producto_id:prodId, nombre:p.nombre, costo:parseFloat(p.costo)||0, precio_ref:parseFloat(p.precio_venta)||0, cantidad:1, talla:null });
+  updatePkgPanel();
+  renderPkgGrid();
+}
+
+function openPkgTallaModal(p) {
+  const tallas = getTallas(p);
+  document.getElementById('tallaSelProductName').textContent = p.nombre + ' (para paquete)';
+  const btns = document.getElementById('tallaBtns');
+  btns.innerHTML = Object.keys(tallas).filter(t => parseInt(tallas[t])>0).map(t =>
+    `<button class="btn btn-ghost" style="flex-direction:column;gap:2px;padding:12px 8px" onclick="addToPkgWithTalla('${p.id}','${t}');closeModal('modalTalla')">
+      <span style="font-family:var(--font-mono);font-weight:700">${t}</span>
+      <span style="font-size:.7rem;color:var(--text-dim)">${tallas[t]} disp.</span>
+    </button>`).join('');
+  // Override callback
+  window._pkgTallaMode = true;
+  document.getElementById('modalTalla').classList.add('open');
+}
+
+function addToPkgWithTalla(prodId, talla) {
+  const p = state.products.find(x => x.id === prodId); if (!p) return;
+  const tallas = getTallas(p);
+  const available = parseInt(tallas[talla]) || 0;
+  const inPkg = pkgCart.filter(i => i.producto_id===prodId && i.talla===talla).reduce((a,i) => a+i.cantidad, 0);
+  if (inPkg >= available) { toast('Stock insuficiente en talla ' + talla, 'error'); return; }
+  const ex = pkgCart.find(i => i.producto_id===prodId && i.talla===talla);
+  if (ex) ex.cantidad++;
+  else pkgCart.push({ producto_id:prodId, nombre:p.nombre+' ('+talla+')', costo:parseFloat(p.costo)||0, precio_ref:parseFloat(p.precio_venta)||0, cantidad:1, talla });
+  updatePkgPanel();
+  renderPkgGrid();
+}
+
+function updatePkgPanel() {
+  const container = document.getElementById('pkgItems'); if (!container) return;
+  if (!pkgCart.length) {
+    container.innerHTML = '<div class="empty-state" style="padding:20px 0"><p style="font-size:.8rem">Agrega productos</p></div>';
+  } else {
+    container.innerHTML = pkgCart.map((item,i) =>
+      `<div class="cart-item">
+        <div class="cart-item-name" style="flex:1">${esc(item.nombre)}<div style="font-size:.7rem;color:var(--text-dim)">Costo ud: ${fmt(item.costo)}</div></div>
+        <div class="cart-item-qty">
+          <div class="qty-btn" onclick="changePkgQty(${i},-1)">−</div>
+          <span style="min-width:20px;text-align:center;font-family:var(--font-mono);font-size:.85rem">${item.cantidad}</span>
+          <div class="qty-btn" onclick="changePkgQty(${i},1)">+</div>
+        </div>
+        <div style="font-family:var(--font-mono);font-size:.8rem;margin:0 6px;color:var(--text-secondary)">${fmt(item.costo*item.cantidad)}</div>
+        <button class="btn btn-danger btn-sm btn-icon" style="padding:4px 6px" onclick="removePkgItem(${i})">✕</button>
+      </div>`).join('');
+  }
+  updatePkgSummary();
+}
+
+function changePkgQty(idx, delta) {
+  const item = pkgCart[idx]; if (!item) return;
+  const newQty = item.cantidad + delta;
+  if (newQty < 1) { pkgCart.splice(idx,1); updatePkgPanel(); renderPkgGrid(); return; }
+  if (delta > 0) {
+    const p = state.products.find(x => x.id===item.producto_id);
+    const available = item.talla ? (parseInt(getTallas(p)[item.talla])||0) : (parseInt(p?.stock)||0);
+    const others = pkgCart.filter((ci,i) => i!==idx && ci.producto_id===item.producto_id && ci.talla===item.talla).reduce((a,ci) => a+ci.cantidad, 0);
+    if (newQty+others > available) { toast('Stock insuficiente', 'error'); return; }
+  }
+  pkgCart[idx].cantidad = newQty;
+  updatePkgPanel();
+  renderPkgGrid();
+}
+
+function removePkgItem(idx) { pkgCart.splice(idx,1); updatePkgPanel(); renderPkgGrid(); }
+
+function setPkgEnvio(val, btn, custom) {
+  pkgEnvio = val;
+  if (!custom) {
+    document.querySelectorAll('.pkg-envio-btn').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+  }
+  updatePkgSummary();
+}
+
+function updatePkgSummary() {
+  const costoProds = pkgCart.reduce((a,i) => a+i.costo*i.cantidad, 0);
+  const envioVal = (pkgEnvio !== null && pkgEnvio !== undefined) ? parseFloat(pkgEnvio)||0 : null;
+  const costoTotal = costoProds + (envioVal !== null ? envioVal : 0);
+  const pv = parseFloat(document.getElementById('pkgPrecioVenta')?.value) || 0;
+  const gan = pv - costoTotal;
+  const margen = costoTotal > 0 ? ((gan/costoTotal)*100).toFixed(1) : 0;
+
+  const el = (id) => document.getElementById(id);
+  if(el('pkgCostoProds')) el('pkgCostoProds').textContent = fmt(costoProds);
+  if(el('pkgCostoTotal')) el('pkgCostoTotal').textContent = fmt(costoTotal);
+
+  // Envio row
+  if (envioVal !== null) {
+    if(el('pkgEnvioRow')) el('pkgEnvioRow').style.display = 'flex';
+    if(el('pkgEnvioMonto')) el('pkgEnvioMonto').textContent = envioVal===0?'GRATIS':fmt(envioVal);
+    if(el('pkgEnvioLabel')) el('pkgEnvioLabel').textContent = envioVal===0?'🎁 Envío gratis':'🚚 Envío';
+  } else {
+    if(el('pkgEnvioRow')) el('pkgEnvioRow').style.display = 'none';
+  }
+
+  // Ganancia
+  if (pv > 0) {
+    if(el('pkgGananciaRow')) el('pkgGananciaRow').style.display = 'flex';
+    if(el('pkgGananciaMonto')) {
+      el('pkgGananciaMonto').textContent = fmt(gan);
+      el('pkgGananciaMonto').style.color = gan >= 0 ? 'var(--green-bright)' : 'var(--red-bright)';
+    }
+    if(el('pkgMargenRow')) el('pkgMargenRow').textContent = 'Margen: ' + margen + '%';
+  } else {
+    if(el('pkgGananciaRow')) el('pkgGananciaRow').style.display = 'none';
+    if(el('pkgMargenRow')) el('pkgMargenRow').textContent = '';
+  }
+}
+
+function clearPkg() {
+  pkgCart = [];
+  pkgEnvio = null;
+  document.querySelectorAll('.pkg-envio-btn').forEach((b,i) => b.classList.toggle('active', i===0));
+  const pv = document.getElementById('pkgPrecioVenta'); if(pv) pv.value = '';
+  const nm = document.getElementById('pkgNombre'); if(nm) nm.value = '';
+  const ce = document.getElementById('pkgEnvioCustom'); if(ce) ce.value = '';
+  updatePkgPanel();
+  renderPkgGrid();
+}
+
+async function crearPaquete() {
+  if (!pkgCart.length) { toast('Agrega al menos un producto', 'error'); return; }
+  const nombre = document.getElementById('pkgNombre')?.value.trim();
+  if (!nombre) { toast('Ponle un nombre al paquete', 'error'); return; }
+  const precio = parseFloat(document.getElementById('pkgPrecioVenta')?.value) || 0;
+  if (!precio) { toast('Define el precio de venta', 'error'); return; }
+  const items = pkgCart.map(i => i.producto_id);
+  const envioVal = (pkgEnvio !== null && pkgEnvio !== undefined) ? pkgEnvio : '';
+  const data = {
+    action: 'savePromo',
+    id: '',
+    nombre,
+    tipo: 'paquete',
+    activa: true,
+    items: JSON.stringify(items),
+    precio,
+    label: nombre,
+    envio_integrado: envioVal,
+    pct:'', scope:'', categoria:'', productos:'', producto_id:'',
+    costo_envio:'', desc_envio:'', scope_2x1:'', categoria_2x1:''
+  };
+  showLoading();
+  try {
+    await api(data);
+    toast('Paquete "'+nombre+'" creado y activo ✓', 'success');
+    clearPkg();
+    await loadAll();
+    renderPkgExisting();
+  } catch(e) { toast('Error: '+e.message, 'error'); }
+  finally { hideLoading(); }
+}
+
+function renderPkgExisting() {
+  const container = document.getElementById('pkgExistingList'); if (!container) return;
+  const paquetes = (state.promociones||[]).filter(p => p.tipo === 'paquete');
+  if (!paquetes.length) { container.innerHTML = '<div style="color:var(--text-dim);font-size:.82rem">Sin paquetes creados aún</div>'; return; }
+  container.innerHTML = paquetes.map(p => {
+    const isActive = p.activa===true||String(p.activa)==='true';
+    let items=[]; try{items=typeof p.items==='string'?JSON.parse(p.items):(p.items||[]);}catch(e){}
+    const count = items.length;
+    const hasEnvio = p.envio_integrado!==null&&p.envio_integrado!==''&&p.envio_integrado!==undefined;
+    return `<div style="padding:10px 12px;background:var(--bg-elevated);border-radius:var(--radius);margin-bottom:6px;border-left:3px solid ${isActive?'var(--green-main)':'var(--border)'}">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <span style="font-weight:600;font-size:.85rem;color:var(--text-primary)">${esc(p.nombre)}</span>
+        <div style="display:flex;gap:4px">
+          <button class="btn ${isActive?'btn-danger':'btn-success'} btn-sm" style="padding:3px 8px;font-size:.7rem" onclick="togglePromoActiva('${p.id}')">${isActive?'Desactivar':'Activar'}</button>
+          <button class="btn btn-danger btn-sm btn-icon" style="padding:3px 6px" onclick="confirmDelete('promo','${p.id}','${esc(p.nombre)}')">🗑</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;font-size:.72rem;color:var(--text-dim)">
+        <span>${count} producto${count!==1?'s':''}</span>
+        <span>${fmt(p.precio)}</span>
+        ${hasEnvio?`<span>🚚 ${parseFloat(p.envio_integrado)===0?'Gratis':fmt(p.envio_integrado)}</span>`:''}
+        <span class="badge ${isActive?'badge-green':'badge-gray'}" style="font-size:.62rem">${isActive?'Activo':'Inactivo'}</span>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 // ============================================================
