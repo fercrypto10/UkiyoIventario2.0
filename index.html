@@ -1615,12 +1615,16 @@ Puedo ayudarte con estrategias de venta, análisis de inventario, recomendacione
               </div>
               <div class="cart-separator"></div>
               <div class="cart-total-row"><span style="color:var(--text-dim)">Costo total</span><span class="mono" style="color:var(--red-bright)" id="pkgCostoTotal">$0.00</span></div>
+              <div class="cart-total-row" id="pkgRetailRow" style="display:none"><span style="color:var(--text-dim)">Precio regular total</span><span class="mono" style="color:var(--text-secondary)" id="pkgRetailMonto">$0.00</span></div>
               <div class="cart-total-row main">
                 <span>Precio de venta</span>
                 <input type="number" class="form-input" id="pkgPrecioVenta" placeholder="0.00" step="0.01" style="width:100px;padding:6px 8px;text-align:right;font-family:var(--font-mono)" oninput="updatePkgSummary()">
               </div>
               <div class="cart-total-row" id="pkgGananciaRow" style="display:none">
                 <span>Ganancia</span><span class="mono" id="pkgGananciaMonto" style="color:var(--green-bright)">$0.00</span>
+              </div>
+              <div class="cart-total-row" id="pkgSavingsRow" style="display:none">
+                <span>💸 Cliente ahorra</span><span class="mono" id="pkgSavingsMonto" style="color:var(--green-bright)">$0.00</span>
               </div>
               <div id="pkgMargenRow" style="font-size:.75rem;text-align:right;color:var(--text-dim);margin-bottom:8px"></div>
               <div class="cart-separator"></div>
@@ -3547,28 +3551,45 @@ function _addPaqueteToCart(p,items,tallasSeleccionadas){
 }
 
 // ---- Override addToCart to apply descuento + integrated envio ----
-const _origAddToCart = addToCart;
 function addToCart(prodId) {
-  const activas=(state.promociones||[]).filter(p=>(p.activa===true||String(p.activa)==='true')&&p.tipo==='descuento');
-  let promo=null;
-  for (const pr of activas){if(getPromoProducts(pr).find(x=>x.id===prodId)){promo=pr;break;}}
+  const p = state.products.find(x => x.id === prodId); if (!p) return;
+  const cat = state.categories.find(c => c.nombre === p.categoria);
+
+  // Check for active descuento promo on this product
+  const activas = (state.promociones||[]).filter(pr => (pr.activa===true||String(pr.activa)==='true') && pr.tipo==='descuento');
+  let promo = null;
+  for (const pr of activas) { if (getPromoProducts(pr).find(x=>x.id===prodId)) { promo=pr; break; } }
+
   if (promo) {
-    const p=state.products.find(x=>x.id===prodId);if(!p)return;
-    const cat=state.categories.find(c=>c.nombre===p.categoria);
-    if (cat&&String(cat.tiene_tallas).toLowerCase()==='true'){window._pendingPromo=promo;openTallaModal(p);return;}
-    const available=parseInt(p.stock)||0;
-    const inCart=cart.filter(i=>i.producto_id===prodId&&!i.talla&&!i.es_paquete).reduce((a,i)=>a+i.cantidad,0);
-    if(inCart>=available){toast('Stock insuficiente','error');return;}
-    const pct=parseFloat(promo.pct)||0, pp=parseFloat(p.precio_venta)*(1-pct/100);
-    // Apply integrated envio if not already set
-    if(promo.envio_integrado!==null&&promo.envio_integrado!==''&&promo.envio_integrado!==undefined&&!state.envioActivo){
+    // With discount promo
+    if (cat && String(cat.tiene_tallas).toLowerCase()==='true') { window._pendingPromo=promo; openTallaModal(p); return; }
+    const available = parseInt(p.stock)||0;
+    const inCart = cart.filter(i=>i.producto_id===prodId&&!i.talla&&!i.es_paquete).reduce((a,i)=>a+i.cantidad,0);
+    if (inCart>=available) { toast('Stock insuficiente — '+available+' uds disponibles','error'); return; }
+    const pct = parseFloat(promo.pct)||0;
+    const pp = parseFloat(p.precio_venta)*(1-pct/100);
+    if (promo.envio_integrado!==null&&promo.envio_integrado!==''&&promo.envio_integrado!==undefined&&!state.envioActivo) {
       state._descEnvio={costo:parseFloat(promo.envio_integrado),desc:'Envío incluido'};
     }
-    const ex=cart.find(i=>i.producto_id===prodId&&!i.talla&&i.promo_id===promo.id);
-    if(ex)ex.cantidad++;
+    const ex = cart.find(i=>i.producto_id===prodId&&!i.talla&&i.promo_id===promo.id);
+    if (ex) ex.cantidad++;
     else cart.push({producto_id:prodId,nombre:p.nombre,precio_unitario:pp,costo_unitario:parseFloat(p.costo),cantidad:1,talla:null,promo_label:'-'+pct+'%',promo_id:promo.id,precio_original:parseFloat(p.precio_venta)});
     renderCart();
-  } else { _origAddToCart(prodId); }
+    return;
+  }
+
+  // Normal flow (no promo)
+  if (cat && String(cat.tiene_tallas).toLowerCase()==='true') {
+    const tallas = getTallas(p);
+    if (Object.keys(tallas).some(t=>(parseInt(tallas[t])||0)>0)) { openTallaModal(p); return; }
+  }
+  const available = parseInt(p.stock)||0;
+  const alreadyInCart = cart.filter(i=>i.producto_id===prodId&&!i.talla&&!i.es_paquete).reduce((a,i)=>a+i.cantidad,0);
+  if (alreadyInCart>=available) { toast('Stock insuficiente — '+available+' uds disponibles','error'); return; }
+  const existing = cart.find(i=>i.producto_id===prodId&&!i.talla&&!i.es_paquete&&!i.promo_id);
+  if (existing) existing.cantidad++;
+  else cart.push({producto_id:prodId,nombre:p.nombre,precio_unitario:parseFloat(p.precio_venta),costo_unitario:parseFloat(p.costo),cantidad:1,talla:null});
+  renderCart();
 }
 
 // ---- Override changeQty for 2x1 ----
@@ -4470,7 +4491,7 @@ function updatePkgPanel() {
   } else {
     container.innerHTML = pkgCart.map((item,i) =>
       `<div class="cart-item">
-        <div class="cart-item-name" style="flex:1">${esc(item.nombre)}<div style="font-size:.7rem;color:var(--text-dim)">Costo ud: ${fmt(item.costo)}</div></div>
+        <div class="cart-item-name" style="flex:1">${esc(item.nombre)}<div style="font-size:.7rem;color:var(--text-dim)">Costo: ${fmt(item.costo)} | PV regular: ${fmt(item.precio_ref)}</div></div>
         <div class="cart-item-qty">
           <div class="qty-btn" onclick="changePkgQty(${i},-1)">−</div>
           <span style="min-width:20px;text-align:center;font-family:var(--font-mono);font-size:.85rem">${item.cantidad}</span>
@@ -4511,6 +4532,7 @@ function setPkgEnvio(val, btn, custom) {
 
 function updatePkgSummary() {
   const costoProds = pkgCart.reduce((a,i) => a+i.costo*i.cantidad, 0);
+  const retailTotal = pkgCart.reduce((a,i) => a+i.precio_ref*i.cantidad, 0); // total at regular prices
   const envioVal = (pkgEnvio !== null && pkgEnvio !== undefined) ? parseFloat(pkgEnvio)||0 : null;
   const costoTotal = costoProds + (envioVal !== null ? envioVal : 0);
   const pv = parseFloat(document.getElementById('pkgPrecioVenta')?.value) || 0;
@@ -4520,6 +4542,21 @@ function updatePkgSummary() {
   const el = (id) => document.getElementById(id);
   if(el('pkgCostoProds')) el('pkgCostoProds').textContent = fmt(costoProds);
   if(el('pkgCostoTotal')) el('pkgCostoTotal').textContent = fmt(costoTotal);
+  // Show retail total and savings
+  if(el('pkgRetailRow')) {
+    if(pkgCart.length>0 && retailTotal>0){
+      el('pkgRetailRow').style.display='flex';
+      el('pkgRetailMonto').textContent = fmt(retailTotal);
+    } else { el('pkgRetailRow').style.display='none'; }
+  }
+  if(el('pkgSavingsRow')) {
+    if(pv>0 && retailTotal>0){
+      const savings = retailTotal - pv;
+      el('pkgSavingsRow').style.display='flex';
+      el('pkgSavingsMonto').textContent = fmt(savings) + ' (' + ((savings/retailTotal)*100).toFixed(0) + '% dto)';
+      el('pkgSavingsMonto').style.color = savings>0?'var(--green-bright)':'var(--red-bright)';
+    } else { el('pkgSavingsRow').style.display='none'; }
+  }
 
   // Envio row
   if (envioVal !== null) {
