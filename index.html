@@ -2675,37 +2675,7 @@ function renderSaleProducts() {
   }).join('');
 }
 
-function addToCart(prodId) {
-  const p = state.products.find(x => x.id === prodId);
-  if (!p) return;
-  const cat = state.categories.find(c => c.nombre === p.categoria);
-
-  if (cat && String(cat.tiene_tallas).toLowerCase() === 'true' && p.tallas && typeof p.tallas === 'object') {
-    openTallaModal(p);
-    return;
-  }
-
-  const available = parseInt(p.stock) || 0;
-  const alreadyInCart = cart.filter(i => i.producto_id === prodId && !i.talla).reduce((a,i) => a + i.cantidad, 0);
-  if (alreadyInCart >= available) {
-    toast(`Stock insuficiente — solo ${available} unidad(es) disponibles`, 'error');
-    return;
-  }
-  const existing = cart.find(i => i.producto_id === prodId && !i.talla);
-  if (existing) {
-    existing.cantidad++;
-  } else {
-    cart.push({
-      producto_id: prodId,
-      nombre: p.nombre,
-      precio_unitario: parseFloat(p.precio_venta),
-      costo_unitario: parseFloat(p.costo),
-      cantidad: 1,
-      talla: null
-    });
-  }
-  renderCart();
-}
+/* addToCart defined below */
 
 function openTallaModal(p) {
   const tallasObj = getTallas(p);
@@ -2753,111 +2723,16 @@ function addToCartWithTalla(prodId, talla) {
   renderCart();
 }
 
-function renderCart() {
-  const container = document.getElementById('cartItems');
-  if (cart.length === 0) {
-    container.innerHTML = '<div class="empty-state" style="padding:20px 0"><p style="font-size:0.8rem">Sin productos</p></div>';
-    document.getElementById('cartSubtotal').textContent = '$0.00';
-    document.getElementById('cartTotal').textContent = '$0.00';
-    document.getElementById('cartGanancia').textContent = '$0.00';
-    return;
-  }
-  container.innerHTML = cart.map((item, i) =>
-    `<div class="cart-item">
-      <div class="cart-item-name">${esc(item.nombre)}</div>
-      <div class="cart-item-qty">
-        <div class="qty-btn" onclick="changeQty(${i},-1)">−</div>
-        <span style="min-width:20px;text-align:center;font-family:var(--font-mono);font-size:0.85rem">${item.cantidad}</span>
-        <div class="qty-btn" onclick="changeQty(${i},1)">+</div>
-      </div>
-      <div class="cart-item-price">${fmt(item.precio_unitario * item.cantidad)}</div>
-      <button class="btn btn-danger btn-sm btn-icon" style="padding:4px 6px" onclick="removeFromCart(${i})">✕</button>
-    </div>`
-  ).join('');
+/* renderCart moved below */
 
-  const subtotal = cart.reduce((a,i) => a + i.precio_unitario * i.cantidad, 0);
-  const ganancia = cart.reduce((a,i) => a + (i.precio_unitario - i.costo_unitario) * i.cantidad, 0);
-  document.getElementById('cartSubtotal').textContent = fmt(subtotal);
-  document.getElementById('cartTotal').textContent = fmt(subtotal);
-  document.getElementById('cartGanancia').textContent = fmt(ganancia);
-}
-
-function changeQty(idx, delta) {
-  const item = cart[idx];
-  const newQty = item.cantidad + delta;
-  if (newQty < 1) return;
-  // Validate against available stock
-  const p = state.products.find(x => x.id === item.producto_id);
-  if (p && delta > 0) {
-    let available;
-    if (item.talla) {
-      const tallas = getTallas(p);
-      available = parseInt(tallas[item.talla]) || 0;
-    } else {
-      available = parseInt(p.stock) || 0;
-    }
-    // Count already in cart for this product+talla
-    const alreadyInCart = cart.filter((ci, i) => i !== idx && ci.producto_id === item.producto_id && ci.talla === item.talla).reduce((a,ci) => a + ci.cantidad, 0);
-    if (newQty + alreadyInCart > available) {
-      toast(`Stock insuficiente — solo ${available} unidades disponibles${item.talla ? ' talla ' + item.talla : ''}`, 'error');
-      return;
-    }
-  }
-  cart[idx].cantidad = newQty;
-  renderCart();
-}
+/* changeQty moved below */
 function removeFromCart(idx) {
   cart.splice(idx, 1);
   renderCart();
 }
-function clearCart() {
-  cart = [];
-  renderCart();
-}
+/* clearCart moved below */
 
-async function confirmSale() {
-  if (cart.length === 0) { toast('El carrito está vacío', 'error'); return; }
-
-  // Final stock validation before confirming
-  for (const item of cart) {
-    const p = state.products.find(x => x.id === item.producto_id);
-    if (!p) { toast(`Producto no encontrado: ${item.nombre}`, 'error'); return; }
-    let available;
-    if (item.talla) {
-      const tallas = getTallas(p);
-      available = parseInt(tallas[item.talla]) || 0;
-    } else {
-      available = parseInt(p.stock) || 0;
-    }
-    if (item.cantidad > available) {
-      toast(`❌ Stock insuficiente: "${item.nombre}" — disponible: ${available}, en carrito: ${item.cantidad}`, 'error');
-      return;
-    }
-  }
-
-  const data = {
-    action: 'recordSale',
-    items: JSON.stringify(cart),
-    metodo_pago: document.getElementById('payMethod').value,
-    notas: document.getElementById('saleNotes').value,
-    registrado_por: state.currentUser?.user || 'Ukiyo1',
-    fecha: new Date().toISOString()
-  };
-
-  showLoading();
-  try {
-    const res = await api(data);
-    const total = cart.reduce((a,i) => a + i.precio_unitario * i.cantidad, 0);
-    toast(`Venta registrada — ${fmt(total)} ✓`, 'success');
-    clearCart();
-    await loadAll();
-    navigate('dashboard');
-  } catch(e) {
-    toast('Error al registrar venta: ' + e.message, 'error');
-  } finally {
-    hideLoading();
-  }
-}
+async /* confirmSale moved below */
 
 // ============================================================
 // HISTORIAL
@@ -3593,7 +3468,6 @@ function addToCart(prodId) {
 }
 
 // ---- Override changeQty for 2x1 ----
-const _origChangeQty = changeQty;
 function changeQty(idx, delta) {
   const item=cart[idx];
   if(item&&!item.es_paquete&&delta>0){
@@ -3609,11 +3483,20 @@ function changeQty(idx, delta) {
       renderCart(); toast('2×1 aplicado ✓','success'); return;
     }
   }
-  _origChangeQty(idx,delta);
+  // fallthrough: no 2x1 promo match, use normal qty logic
+  const item2=cart[idx]; if(!item2)return;
+  const newQty2=item2.cantidad+delta; if(newQty2<1){cart.splice(idx,1);renderCart();return;}
+  if(delta>0){
+    const p2=state.products.find(x=>x.id===item2.producto_id);
+    const avail2=item2.talla?(parseInt(getTallas(p2||{})[item2.talla])||0):(parseInt(p2?.stock)||0);
+    const others2=cart.filter((ci,i)=>i!==idx&&ci.producto_id===item2.producto_id&&ci.talla===item2.talla).reduce((a,ci)=>a+ci.cantidad,0);
+    if(newQty2+others2>avail2){toast("Stock insuficiente","error");return;}
+  }
+  cart[idx].cantidad=newQty2;
+  renderCart();
 }
 
 // ---- Override renderCart to show promo info + integrated envio ----
-const _origRenderCart = renderCart;
 function renderCart() {
   const container=document.getElementById('cartItems');
   if (!container) return;
@@ -3662,13 +3545,13 @@ function renderCart() {
 }
 
 // ---- clearCart also clears envio state ----
-const _origClearCart = clearCart;
 function clearCart() {
-  state._descEnvio=null; state._paqueteEnvio=null; _origClearCart();
+  state._descEnvio=null; state._paqueteEnvio=null;
+  cart=[];
+  renderCart();
 }
 
 // ---- Override confirmSale ----
-const _origConfirmSale = confirmSale;
 async function confirmSale() {
   if (cart.length===0){toast('El carrito está vacío','error');return;}
   let envio=0, envioDesc='';
