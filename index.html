@@ -965,6 +965,14 @@ tr:hover td { background: var(--bg-elevated); color: var(--text-primary); }
 /* PAQUETE BUILDER */
 .pkg-envio-btn { transition: all var(--transition); }
 .pkg-envio-btn.active { background:var(--green-dim);border-color:var(--green-main);color:var(--green-bright); }
+
+/* TALLAS CON PRECIO/COSTO */
+.talla-row { display:grid; grid-template-columns:60px 1fr 1fr 1fr; gap:6px; margin-bottom:6px; align-items:center; }
+.talla-row-label { font-family:var(--font-mono); font-size:.78rem; font-weight:700; color:var(--text-secondary); text-align:center; padding:8px 4px; background:var(--bg-elevated); border-radius:var(--radius); }
+.talla-row-label.has-stock { color:var(--blue-bright); background:var(--blue-dim); }
+.talla-price-input { background:var(--bg-input); border:1px solid var(--border-light); border-radius:var(--radius); padding:7px 8px; color:var(--text-primary); font-size:.82rem; font-family:var(--font-mono); outline:none; transition:border-color var(--transition); width:100%; }
+.talla-price-input:focus { border-color:var(--blue-main); }
+.talla-price-input.modified { border-color:var(--amber-main); background:var(--amber-dim); }
 </style>
 </head>
 <body>
@@ -1708,8 +1716,18 @@ Puedo ayudarte con estrategias de venta, análisis de inventario, recomendacione
         </div>
       </div>
       <div id="stockTallas" style="display:none">
-        <div class="form-section-title">Tallas (cantidad por talla)</div>
-        <div class="tallas-grid" id="tallasGrid"></div>
+        <div class="form-section-title" style="display:flex;align-items:center;justify-content:space-between">
+          <span>Tallas — Stock, Precio y Costo</span>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="aplicarBaseATodas()" title="Aplicar precio y costo base a todas las tallas">↺ Aplicar base a todas</button>
+        </div>
+        <!-- Encabezado de columnas -->
+        <div style="display:grid;grid-template-columns:60px 1fr 1fr 1fr;gap:6px;margin-bottom:4px;padding:0 2px">
+          <div style="font-size:.62rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-dim)">Talla</div>
+          <div style="font-size:.62rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-dim)">Stock</div>
+          <div style="font-size:.62rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-dim)">Precio venta ($)</div>
+          <div style="font-size:.62rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-dim)">Costo ($)</div>
+        </div>
+        <div id="tallasGrid"></div>
         <div class="form-group" style="margin-top:12px">
           <label class="form-label">Stock Mínimo por Talla (alerta)</label>
           <input type="number" class="form-input" id="prodStockMinTalla" placeholder="2" min="0" style="max-width:200px">
@@ -2518,7 +2536,9 @@ function openProductModal(id) {
     // Tallas
     const cat = state.categories.find(c => c.nombre === p.categoria);
     if (cat && String(cat.tiene_tallas).toLowerCase() === 'true') {
-      showTallasInput(p.tallas || {});
+      const pt = p.precios_talla ? (typeof p.precios_talla==='string' ? JSON.parse(p.precios_talla) : p.precios_talla) : {};
+      const ct = p.costos_talla  ? (typeof p.costos_talla ==='string' ? JSON.parse(p.costos_talla)  : p.costos_talla)  : {};
+      showTallasInput(getTallas(p), pt, ct);
     } else {
       document.getElementById('stockSimple').style.display = 'grid';
       document.getElementById('stockTallas').style.display = 'none';
@@ -2545,23 +2565,57 @@ function openProductModal(id) {
 function checkTallas() {
   const cat = state.categories.find(c => c.nombre === document.getElementById('prodCategoria').value);
   if (cat && String(cat.tiene_tallas).toLowerCase() === 'true') {
-    showTallasInput({});
+    showTallasInput({}, {}, {});
   } else {
     document.getElementById('stockSimple').style.display = 'grid';
     document.getElementById('stockTallas').style.display = 'none';
   }
 }
 
-function showTallasInput(tallasData) {
+function showTallasInput(tallasData, preciosTalla, costosTalla) {
   document.getElementById('stockSimple').style.display = 'none';
   document.getElementById('stockTallas').style.display = 'block';
   const grid = document.getElementById('tallasGrid');
-  grid.innerHTML = TALLAS_ORDER.map(t =>
-    `<div class="talla-input-wrap">
-      <div class="talla-label">${t}</div>
-      <input type="number" class="talla-input" data-talla="${t}" value="${tallasData[t] || 0}" min="0">
-    </div>`
-  ).join('');
+  const precioBase = parseFloat(document.getElementById('prodPrecio').value) || 0;
+  const costoBase  = parseFloat(document.getElementById('prodCosto').value)  || 0;
+  const pt = preciosTalla || {};
+  const ct = costosTalla  || {};
+  grid.innerHTML = TALLAS_ORDER.map(t => {
+    const stock  = (tallasData && tallasData[t] != null) ? (tallasData[t] || 0) : 0;
+    const precio = pt[t] != null ? pt[t] : (precioBase || '');
+    const costo  = ct[t] != null ? ct[t] : (costoBase  || '');
+    const hasStock = parseInt(stock) > 0;
+    return `<div class="talla-row">
+      <div class="talla-row-label ${hasStock ? 'has-stock' : ''}">${t}</div>
+      <input type="number" class="talla-price-input talla-stock-input" data-talla="${t}" value="${stock}" min="0" placeholder="0" onchange="updateTallaLabel(this)">
+      <input type="number" class="talla-price-input talla-precio-input" data-talla="${t}" value="${precio}" min="0" step="0.01" placeholder="${precioBase || '0.00'}" oninput="markModified(this,${precioBase})">
+      <input type="number" class="talla-price-input talla-costo-input"  data-talla="${t}" value="${costo}"  min="0" step="0.01" placeholder="${costoBase  || '0.00'}" oninput="markModified(this,${costoBase})">
+    </div>`;
+  }).join('');
+}
+
+function updateTallaLabel(inp) {
+  const label = inp.closest('.talla-row')?.querySelector('.talla-row-label');
+  if (label) label.classList.toggle('has-stock', parseInt(inp.value) > 0);
+}
+
+function markModified(inp, baseVal) {
+  const val = parseFloat(inp.value);
+  inp.classList.toggle('modified', !isNaN(val) && val !== baseVal && inp.value !== '');
+}
+
+function aplicarBaseATodas() {
+  const precioBase = parseFloat(document.getElementById('prodPrecio').value) || 0;
+  const costoBase  = parseFloat(document.getElementById('prodCosto').value)  || 0;
+  document.querySelectorAll('#tallasGrid .talla-precio-input').forEach(inp => {
+    inp.value = precioBase || '';
+    inp.classList.remove('modified');
+  });
+  document.querySelectorAll('#tallasGrid .talla-costo-input').forEach(inp => {
+    inp.value = costoBase || '';
+    inp.classList.remove('modified');
+  });
+  toast('Precio y costo base aplicado a todas las tallas', 'success');
 }
 
 function calcPrecioSugerido() {
@@ -2602,15 +2656,29 @@ async function saveProduct() {
   let tallas = null;
   let stock = parseInt(document.getElementById('prodStock').value) || 0;
 
+  let preciosTalla = null, costosTalla = null;
   if (cat && String(cat.tiene_tallas).toLowerCase() === 'true') {
-    tallas = {};
+    tallas = {}; preciosTalla = {}; costosTalla = {};
     let totalStock = 0;
-    document.querySelectorAll('#tallasGrid .talla-input').forEach(inp => {
+    const precioBase = parseFloat(document.getElementById('prodPrecio').value) || 0;
+    const costoBase  = parseFloat(document.getElementById('prodCosto').value)  || 0;
+    // Collect stock
+    document.querySelectorAll('#tallasGrid .talla-stock-input').forEach(inp => {
       const qty = parseInt(inp.value) || 0;
       tallas[inp.dataset.talla] = qty;
       totalStock += qty;
     });
     stock = totalStock;
+    // Collect precio per talla (only save if different from base)
+    document.querySelectorAll('#tallasGrid .talla-precio-input').forEach(inp => {
+      const val = parseFloat(inp.value);
+      preciosTalla[inp.dataset.talla] = (!isNaN(val) && inp.value !== '') ? val : precioBase;
+    });
+    // Collect costo per talla
+    document.querySelectorAll('#tallasGrid .talla-costo-input').forEach(inp => {
+      const val = parseFloat(inp.value);
+      costosTalla[inp.dataset.talla] = (!isNaN(val) && inp.value !== '') ? val : costoBase;
+    });
   }
 
   const data = {
@@ -2624,6 +2692,8 @@ async function saveProduct() {
     stock_minimo: document.getElementById('prodStockMin').value || document.getElementById('prodStockMinTalla').value || 3,
     notas: document.getElementById('prodNotas').value,
     tallas: tallas ? JSON.stringify(tallas) : '{}',
+    precios_talla: preciosTalla ? JSON.stringify(preciosTalla) : '{}',
+    costos_talla:  costosTalla  ? JSON.stringify(costosTalla)  : '{}',
     activo: true
   };
 
@@ -2682,12 +2752,15 @@ function openTallaModal(p) {
   const tallasObj = getTallas(p);
   document.getElementById('tallaSelProductName').textContent = p.nombre;
   const btns = document.getElementById('tallaBtns');
-  btns.innerHTML = TALLAS_ORDER.filter(t => (parseInt(tallasObj[t]) || 0) > 0).map(t =>
-    `<button class="btn btn-ghost" style="flex-direction:column;gap:2px;padding:12px 8px" onclick="addToCartWithTalla('${p.id}','${t}');closeModal('modalTalla')">
+  const pt2 = p.precios_talla && typeof p.precios_talla==='object' ? p.precios_talla : {};
+  btns.innerHTML = TALLAS_ORDER.filter(t => (parseInt(tallasObj[t]) || 0) > 0).map(t => {
+    const precioPorTalla = (pt2[t] != null && pt2[t] !== '') ? pt2[t] : p.precio_venta;
+    return `<button class="btn btn-ghost" style="flex-direction:column;gap:3px;padding:12px 8px" onclick="addToCartWithTalla('${p.id}','${t}');closeModal('modalTalla')">
       <span style="font-family:var(--font-mono);font-weight:700">${t}</span>
-      <span style="font-size:0.7rem;color:var(--text-dim)">${tallasObj[t]} disp.</span>
-    </button>`
-  ).join('');
+      <span style="font-size:.72rem;color:var(--blue-bright);font-family:var(--font-mono)">${fmt(precioPorTalla)}</span>
+      <span style="font-size:.65rem;color:var(--text-dim)">${tallasObj[t]} disp.</span>
+    </button>`;
+  }).join('')
   document.getElementById('modalTalla').classList.add('open');
   document.getElementById('modalTalla')._prod = p;
 }
@@ -2703,24 +2776,16 @@ function addToCartWithTalla(prodId, talla) {
   if (!p) return;
   const tallas = getTallas(p);
   const available = parseInt(tallas[talla]) || 0;
-  const alreadyInCart = cart.filter(i => i.producto_id === prodId && i.talla === talla).reduce((a,i) => a + i.cantidad, 0);
-  if (alreadyInCart >= available) {
-    toast(`Stock insuficiente — solo ${available} unidad(es) disponibles en talla ${talla}`, 'error');
-    return;
-  }
+  const alreadyInCart = cart.filter(i => i.producto_id === prodId && i.talla === talla).reduce((a,i) => a+i.cantidad, 0);
+  if (alreadyInCart >= available) { toast('Stock insuficiente — '+available+' uds en talla '+talla,'error'); return; }
+  // Use per-talla price/cost if defined
+  const pt = p.precios_talla && typeof p.precios_talla==='object' ? p.precios_talla : {};
+  const ct = p.costos_talla  && typeof p.costos_talla ==='object' ? p.costos_talla  : {};
+  const precio = (pt[talla] != null && pt[talla] !== '') ? parseFloat(pt[talla]) : parseFloat(p.precio_venta);
+  const costo  = (ct[talla] != null && ct[talla] !== '') ? parseFloat(ct[talla])  : parseFloat(p.costo);
   const existing = cart.find(i => i.producto_id === prodId && i.talla === talla);
-  if (existing) {
-    existing.cantidad++;
-  } else {
-    cart.push({
-      producto_id: prodId,
-      nombre: p.nombre + ` (${talla})`,
-      precio_unitario: parseFloat(p.precio_venta),
-      costo_unitario: parseFloat(p.costo),
-      cantidad: 1,
-      talla
-    });
-  }
+  if (existing) existing.cantidad++;
+  else cart.push({ producto_id:prodId, nombre:p.nombre+' ('+talla+')', precio_unitario:precio, costo_unitario:costo, cantidad:1, talla });
   renderCart();
 }
 
