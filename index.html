@@ -2049,6 +2049,7 @@ let state = {
   currentUser: null,
   loaded: false
 };
+let loadingEl = null;
 
 // ============================================================
 // LOGIN — con sesión persistente via sessionStorage
@@ -2732,7 +2733,7 @@ function removeFromCart(idx) {
 }
 /* clearCart moved below */
 
-async /* confirmSale moved below */
+/* confirmSale moved below */
 
 // ============================================================
 // HISTORIAL
@@ -4206,7 +4207,6 @@ function testUserSync() {}
 // ============================================================
 // LOADING / TOAST
 // ============================================================
-let loadingEl = null;
 function showLoading() {
   if (loadingEl) return;
   loadingEl = document.createElement('div');
