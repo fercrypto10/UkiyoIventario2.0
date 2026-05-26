@@ -973,6 +973,31 @@ tr:hover td { background: var(--bg-elevated); color: var(--text-primary); }
 .talla-price-input { background:var(--bg-input); border:1px solid var(--border-light); border-radius:var(--radius); padding:7px 8px; color:var(--text-primary); font-size:.82rem; font-family:var(--font-mono); outline:none; transition:border-color var(--transition); width:100%; }
 .talla-price-input:focus { border-color:var(--blue-main); }
 .talla-price-input.modified { border-color:var(--amber-main); background:var(--amber-dim); }
+
+/* EVENTOS */
+.evento-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px 24px; margin-bottom:14px; transition:border-color var(--transition); position:relative; overflow:hidden; }
+.evento-card::before { content:''; position:absolute; top:0; left:0; width:4px; height:100%; border-radius:4px 0 0 4px; }
+.evento-card.incluido::before { background:var(--blue-main); }
+.evento-card.excluido::before { background:var(--border); }
+.evento-card-header { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:12px; flex-wrap:wrap; gap:8px; }
+.evento-nombre { font-family:var(--font-display); font-size:1.2rem; letter-spacing:1.5px; color:var(--text-primary); }
+.evento-meta { font-size:.78rem; color:var(--text-dim); margin-top:3px; }
+.evento-stats { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-top:12px; }
+.evento-stat { text-align:center; background:var(--bg-elevated); border-radius:var(--radius); padding:10px; }
+.evento-stat-label { font-size:.62rem; letter-spacing:2px; text-transform:uppercase; color:var(--text-dim); margin-bottom:4px; }
+.evento-stat-val { font-family:var(--font-mono); font-size:1rem; color:var(--text-primary); }
+.toggle-incluir { display:flex; align-items:center; gap:8px; cursor:pointer; }
+.toggle-switch { width:40px; height:22px; background:var(--border); border-radius:99px; position:relative; transition:background var(--transition); flex-shrink:0; }
+.toggle-switch.on { background:var(--blue-main); }
+.toggle-switch::after { content:''; position:absolute; top:3px; left:3px; width:16px; height:16px; background:#fff; border-radius:50%; transition:transform var(--transition); }
+.toggle-switch.on::after { transform:translateX(18px); }
+.toggle-label { font-size:.78rem; color:var(--text-secondary); }
+.eventos-summary { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:14px; margin-bottom:24px; }
+.tipo-badge { display:inline-flex; align-items:center; padding:3px 10px; border-radius:99px; font-size:.7rem; font-weight:600; }
+.tipo-carshow { background:#1e2840; color:#5b9cf0; border:1px solid #234480; }
+.tipo-feria { background:#1e3020; color:#2edb6a; border:1px solid #1a4a2a; }
+.tipo-popup { background:#2a1a40; color:#a78bfa; border:1px solid #4a1a90; }
+.tipo-otro { background:var(--bg-elevated); color:var(--text-secondary); border:1px solid var(--border); }
 </style>
 </head>
 <body>
@@ -1034,6 +1059,9 @@ tr:hover td { background: var(--bg-elevated); color: var(--text-primary); }
           <span class="icon">🎨</span> Producción
         </div>
         <div class="nav-section-label">Análisis</div>
+        <div class="nav-item" onclick="navigate('eventos')" id="nav-eventos">
+          <span class="icon">🎪</span> Eventos
+        </div>
         <div class="nav-item" onclick="navigate('estadisticas')" id="nav-estadisticas">
           <span class="icon">📊</span> Estadísticas
         </div>
@@ -1652,6 +1680,38 @@ Puedo ayudarte con estrategias de venta, análisis de inventario, recomendacione
 
       </div>
 
+
+      <!-- ===================== EVENTOS ===================== -->
+      <div class="page" id="page-eventos">
+        <div class="page-header">
+          <div><div class="page-title">EVENTOS</div><div class="page-subtitle">Carshows, ferias y pop-ups — estadísticas independientes</div></div>
+          <button class="btn btn-primary" onclick="openEventoModal()">+ Registrar Evento</button>
+        </div>
+
+        <!-- Summary cards -->
+        <div class="eventos-summary" id="eventosSummary"></div>
+
+        <!-- Filter -->
+        <div class="filter-bar" style="margin-bottom:20px">
+          <select class="filter-select" id="eventoTipoFilter" onchange="renderEventos()">
+            <option value="">Todos los tipos</option>
+            <option value="CarShow">CarShow</option>
+            <option value="Feria">Feria</option>
+            <option value="Pop-up">Pop-up</option>
+            <option value="Otro">Otro</option>
+          </select>
+          <select class="filter-select" id="eventoAnoFilter" onchange="renderEventos()">
+            <option value="">Todos los años</option>
+          </select>
+          <div style="margin-left:auto;font-size:.78rem;color:var(--text-dim);align-self:center">
+            💡 Activa el toggle para incluir un evento en las estadísticas del mes
+          </div>
+        </div>
+
+        <!-- List -->
+        <div id="eventosList"></div>
+      </div>
+
     </main>
   </div>
 </div>
@@ -2032,6 +2092,72 @@ Puedo ayudarte con estrategias de venta, análisis de inventario, recomendacione
   </div>
 </div>
 
+
+<!-- MODAL EVENTO -->
+<div class="modal-overlay" id="modalEvento">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <div class="modal-title" id="modalEventoTitle">REGISTRAR EVENTO</div>
+      <button class="modal-close" onclick="closeModal('modalEvento')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="eventoId">
+      <div class="form-grid">
+        <div class="form-group span-2">
+          <label class="form-label">Nombre del evento *</label>
+          <input type="text" class="form-input" id="eventoNombre" placeholder="ej. CarShow Mayo 2026, Feria Navideña...">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Tipo</label>
+          <select class="form-select" id="eventoTipo">
+            <option>CarShow</option><option>Feria</option><option>Pop-up</option><option>Otro</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Fecha</label>
+          <input type="date" class="form-input" id="eventoFecha">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Ingresos totales ($)</label>
+          <input type="number" class="form-input" id="eventoIngresos" placeholder="0.00" step="0.01" min="0" oninput="updateEventoSim()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Gastos del evento ($)</label>
+          <input type="number" class="form-input" id="eventoGastos" placeholder="Stand, gasolina, comida..." step="0.01" min="0" oninput="updateEventoSim()">
+        </div>
+        <input type="hidden" id="eventoCostoProds" value="0">
+        <!-- Simulator -->
+        <div class="form-group span-2" id="eventoSimWrap" style="display:none">
+          <div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px">
+            <div style="font-size:.65rem;letter-spacing:2px;text-transform:uppercase;color:var(--text-dim);margin-bottom:10px">RESUMEN</div>
+            <div style="display:flex;justify-content:space-between;font-size:.85rem;padding:5px 0;border-bottom:1px solid var(--border)"><span>Ingresos</span><span class="mono" id="simIngresos" style="color:var(--green-bright)">$0.00</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:.85rem;padding:5px 0;border-bottom:1px solid var(--border)"><span style="color:var(--text-dim)">Gastos evento</span><span class="mono" id="simGastos" style="color:var(--red-bright)">$0.00</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:.9rem;padding:8px 0;font-weight:600"><span>Utilidad del evento</span><span class="mono" id="simGanancia">$0.00</span></div>
+          </div>
+        </div>
+        <div class="form-group span-2">
+          <label class="form-label">Notas</label>
+          <input type="text" class="form-input" id="eventoNotas" placeholder="Observaciones del evento...">
+        </div>
+        <div class="form-group span-2">
+          <label class="toggle-incluir">
+            <div class="toggle-switch" id="eventoIncluirToggle" onclick="toggleEventoIncluir()"></div>
+            <div>
+              <div class="toggle-label" style="color:var(--text-primary);font-weight:500">Incluir en estadísticas del mes</div>
+              <div class="toggle-label">Si está activo, los ingresos se suman al dashboard y finanzas de ese mes</div>
+            </div>
+          </label>
+          <input type="hidden" id="eventoIncluir" value="false">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal('modalEvento')">Cancelar</button>
+        <button class="btn btn-primary" onclick="saveEvento()">💾 Guardar Evento</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST CONTAINER -->
 <div id="toastContainer"></div>
 
@@ -2062,6 +2188,7 @@ let state = {
   ordenes: [],
   insumos: [],
   promociones: [],
+  eventos: [],
   cart: [],
   envioActivo: null,
   currentUser: null,
@@ -2182,6 +2309,7 @@ async function loadAll() {
     state.ordenes = data.ordenes || [];
     state.insumos = data.insumos || [];
     state.promociones = data.promociones || [];
+    state.eventos = data.eventos || [];
     state.loaded = true;
 
     renderAll();
@@ -2206,6 +2334,7 @@ function renderAll() {
   renderInsumos();
   renderEstadisticas();
   renderPromociones();
+  renderEventos();
 }
 
 // ============================================================
@@ -2217,6 +2346,7 @@ function navigate(page) {
   document.getElementById('page-' + page).classList.add('active');
   document.getElementById('nav-' + page).classList.add('active');
   if (page === 'ventas') { renderSaleProducts(); renderActivePromosBar(); }
+  if (page === 'eventos') renderEventos();
   if (page === 'promociones') { renderPromociones(); switchPromoTab('campanas'); }
   if (page === 'asesor') { document.getElementById('chatInput')?.focus(); }
 }
@@ -3129,7 +3259,8 @@ function confirmDelete(type, id, label) {
       else if (type === 'gasto') res = await api({ action: 'deleteGasto', id: String(id) });
       else if (type === 'orden') res = await api({ action: 'deleteOrden', id: String(id) });
       else if (type === 'insumo') res = await api({ action: 'deleteInsumo', id: String(id) });
-      else if (type === 'promo') res = await api({ action: 'deletePromo', id: String(id) });
+      else if (type === 'promo')   res = await api({ action: 'deletePromo',   id: String(id) });
+      else if (type === 'evento') res = await api({ action: 'deleteEvento', id: String(id) });
       if (res && res.success) {
         toast(restoreStock ? 'Venta eliminada y stock devuelto ✓' : 'Eliminado ✓', 'success');
         await loadAll();
@@ -4597,6 +4728,202 @@ function renderPkgExisting() {
       </div>
     </div>`;
   }).join('');
+}
+
+
+// ============================================================
+// EVENTOS
+// ============================================================
+let _eventoIncluir = false;
+
+function toggleEventoIncluir() {
+  _eventoIncluir = !_eventoIncluir;
+  const toggle = document.getElementById('eventoIncluirToggle');
+  const hidden = document.getElementById('eventoIncluir');
+  if (toggle) toggle.classList.toggle('on', _eventoIncluir);
+  if (hidden) hidden.value = _eventoIncluir;
+}
+
+function updateEventoSim() {
+  const ing  = parseFloat(document.getElementById('eventoIngresos')?.value) || 0;
+  const gast = parseFloat(document.getElementById('eventoGastos')?.value)   || 0;
+  const wrap = document.getElementById('eventoSimWrap');
+  if (!wrap) return;
+  wrap.style.display = (ing > 0 || gast > 0) ? 'block' : 'none';
+  const util = ing - gast;
+  const el = (id) => document.getElementById(id);
+  if(el('simIngresos')) el('simIngresos').textContent = fmt(ing);
+  if(el('simGastos'))   el('simGastos').textContent   = fmt(gast);
+  if(el('simGanancia')) {
+    el('simGanancia').textContent = fmt(util);
+    el('simGanancia').style.color = util >= 0 ? 'var(--green-bright)' : 'var(--red-bright)';
+  }
+}
+
+function openEventoModal(id) {
+  _eventoIncluir = false;
+  const toggle = document.getElementById('eventoIncluirToggle');
+  if (toggle) toggle.classList.remove('on');
+  ['eventoId','eventoNombre','eventoNotas','eventoIngresos','eventoCostoProds','eventoGastos'].forEach(x => {
+    const el = document.getElementById(x); if (el) el.value = '';
+  });
+  document.getElementById('eventoIncluir').value = 'false';
+  document.getElementById('eventoFecha').value = new Date().toISOString().split('T')[0];
+  document.getElementById('eventoSimWrap').style.display = 'none';
+
+  if (id) {
+    const ev = (state.eventos||[]).find(x=>x.id===id); if (!ev) return;
+    document.getElementById('modalEventoTitle').textContent = 'EDITAR EVENTO';
+    document.getElementById('eventoId').value       = ev.id;
+    document.getElementById('eventoNombre').value   = ev.nombre;
+    document.getElementById('eventoTipo').value     = ev.tipo || 'CarShow';
+    document.getElementById('eventoFecha').value    = String(ev.fecha).slice(0,10);
+    document.getElementById('eventoIngresos').value = ev.ingresos || '';
+    document.getElementById('eventoCostoProds').value = ev.costo_productos || '';
+    document.getElementById('eventoGastos').value   = ev.gastos || '';
+    document.getElementById('eventoNotas').value    = ev.notas || '';
+    _eventoIncluir = ev.incluir_en_mes === true || String(ev.incluir_en_mes) === 'true';
+    if (toggle) toggle.classList.toggle('on', _eventoIncluir);
+    document.getElementById('eventoIncluir').value = _eventoIncluir;
+    updateEventoSim();
+  } else {
+    document.getElementById('modalEventoTitle').textContent = 'REGISTRAR EVENTO';
+  }
+  document.getElementById('modalEvento').classList.add('open');
+}
+
+async function saveEvento() {
+  const nombre = document.getElementById('eventoNombre').value.trim();
+  const fecha  = document.getElementById('eventoFecha').value;
+  if (!nombre || !fecha) { toast('Nombre y fecha son requeridos', 'error'); return; }
+  const data = {
+    action: 'saveEvento',
+    id:     document.getElementById('eventoId').value,
+    nombre,
+    tipo:            document.getElementById('eventoTipo').value,
+    fecha,
+    ingresos:        parseFloat(document.getElementById('eventoIngresos').value)    || 0,
+    costo_productos: parseFloat(document.getElementById('eventoCostoProds').value)  || 0,
+    gastos:          parseFloat(document.getElementById('eventoGastos').value)      || 0,
+    notas:           document.getElementById('eventoNotas').value,
+    incluir_en_mes:  _eventoIncluir
+  };
+  showLoading();
+  try {
+    await api(data);
+    toast('Evento guardado ✓', 'success');
+    closeModal('modalEvento');
+    await loadAll();
+    renderEventos();
+  } catch(e) { toast('Error: '+e.message, 'error'); }
+  finally { hideLoading(); }
+}
+
+async function toggleEventoEnMes(id) {
+  const ev = (state.eventos||[]).find(x=>x.id===id); if (!ev) return;
+  const newVal = !(ev.incluir_en_mes === true || String(ev.incluir_en_mes) === 'true');
+  showLoading();
+  try {
+    await api({ action:'saveEvento', ...ev, id:ev.id, incluir_en_mes: newVal });
+    toast(newVal ? 'Incluido en estadísticas del mes ✓' : 'Excluido de estadísticas', newVal ? 'success' : 'info');
+    await loadAll();
+    renderEventos();
+  } catch(e) { toast('Error: '+e.message, 'error'); }
+  finally { hideLoading(); }
+}
+
+function renderEventos() {
+  const tipoFilter = document.getElementById('eventoTipoFilter')?.value || '';
+  const anoFilter  = document.getElementById('eventoAnoFilter')?.value  || '';
+  const eventos = state.eventos || [];
+
+  // Populate year filter
+  const years = [...new Set(eventos.map(e => String(e.fecha).slice(0,4)))].sort().reverse();
+  const anoSel = document.getElementById('eventoAnoFilter');
+  if (anoSel) {
+    const prev = anoSel.value;
+    anoSel.innerHTML = '<option value="">Todos los años</option>' + years.map(y=>`<option value="${y}" ${y===prev?'selected':''}>${y}</option>`).join('');
+  }
+
+  let filtered = eventos;
+  if (tipoFilter) filtered = filtered.filter(e => e.tipo === tipoFilter);
+  if (anoFilter)  filtered = filtered.filter(e => String(e.fecha).startsWith(anoFilter));
+  filtered = [...filtered].sort((a,b) => new Date(b.fecha) - new Date(a.fecha));
+
+  // Summary cards
+  const totalIng  = filtered.reduce((a,e) => a+(parseFloat(e.ingresos)||0), 0);
+  const totalGan  = filtered.reduce((a,e) => a+(parseFloat(e.ingresos)||0)-(parseFloat(e.gastos)||0), 0);
+  const totalEv   = filtered.length;
+  const incluidos = filtered.filter(e => e.incluir_en_mes===true||String(e.incluir_en_mes)==='true').length;
+  const sumEl = document.getElementById('eventosSummary');
+  if (sumEl) sumEl.innerHTML = `
+    <div class="stat-card blue"><div class="stat-label">Total Eventos</div><div class="stat-value">${totalEv}</div><div class="stat-sub">${incluidos} incluidos en mes</div></div>
+    <div class="stat-card green"><div class="stat-label">Ingresos Totales</div><div class="stat-value mono">${fmt(totalIng)}</div></div>
+    <div class="stat-card amber"><div class="stat-label">Ganancia Neta</div><div class="stat-value mono">${fmt(totalGan)}</div><div class="stat-sub">Después de costos y gastos</div></div>
+    <div class="stat-card blue"><div class="stat-label">Promedio por Evento</div><div class="stat-value mono">${totalEv>0?fmt(totalIng/totalEv):'$0.00'}</div></div>`;
+
+  const tipoBadgeClass = { CarShow:'tipo-carshow', Feria:'tipo-feria', 'Pop-up':'tipo-popup', Otro:'tipo-otro' };
+  const container = document.getElementById('eventosList');
+  if (!container) return;
+
+  if (!filtered.length) {
+    container.innerHTML = '<div class="empty-state"><div class="icon">🎪</div><p>Sin eventos registrados. Crea uno con el botón de arriba.</p></div>';
+    return;
+  }
+
+  container.innerHTML = filtered.map(ev => {
+    const ing  = parseFloat(ev.ingresos)        || 0;
+    const cost = parseFloat(ev.costo_productos) || 0;
+    const gast = parseFloat(ev.gastos)          || 0;
+    const gan  = ing - gast;
+    const margen = ing > 0 ? ((gan/ing)*100).toFixed(1) : 0;
+    const incluido = ev.incluir_en_mes===true || String(ev.incluir_en_mes)==='true';
+    const tipoClass = tipoBadgeClass[ev.tipo] || 'tipo-otro';
+    return `<div class="evento-card ${incluido?'incluido':'excluido'}">
+      <div class="evento-card-header">
+        <div>
+          <div class="evento-nombre">${esc(ev.nombre)}</div>
+          <div class="evento-meta">
+            <span class="tipo-badge ${tipoClass}">${esc(ev.tipo||'Otro')}</span>
+            <span style="margin-left:8px">${fmtDate(ev.fecha)}</span>
+            ${ev.notas?`<span style="margin-left:8px;color:var(--text-dim)">📝 ${esc(ev.notas)}</span>`:''}
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <label class="toggle-incluir" onclick="toggleEventoEnMes('${ev.id}')">
+            <div class="toggle-switch ${incluido?'on':''}"></div>
+            <span class="toggle-label">${incluido?'En estadísticas':'Solo evento'}</span>
+          </label>
+          <button class="btn btn-ghost btn-sm btn-icon" onclick="openEventoModal('${ev.id}')">✏️</button>
+          <button class="btn btn-danger btn-sm btn-icon" onclick="confirmDelete('evento','${ev.id}','${esc(ev.nombre)}')">🗑</button>
+        </div>
+      </div>
+      <div class="evento-stats">
+        <div class="evento-stat">
+          <div class="evento-stat-label">Ingresos</div>
+          <div class="evento-stat-val" style="color:var(--green-bright)">${fmt(ing)}</div>
+        </div>
+        <div class="evento-stat">
+          <div class="evento-stat-label">Gastos</div>
+          <div class="evento-stat-val" style="color:var(--red-bright)">${fmt(gast)}</div>
+        </div>
+        <div class="evento-stat">
+          <div class="evento-stat-label">Utilidad</div>
+          <div class="evento-stat-val" style="color:${gan>=0?'var(--green-bright)':'var(--red-bright)'}">${fmt(gan)}</div>
+        </div>
+        <div class="evento-stat">
+          <div class="evento-stat-label">% Utilidad</div>
+          <div class="evento-stat-val" style="color:${margen>=30?'var(--green-bright)':'var(--amber-bright)'}">${ing>0?margen+'%':'—'}</div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderEventosSummaryForDashboard() {
+  // Add evento ingresos to dashboard if incluir_en_mes is true
+  // Called from renderDashboard — eventos included in month are already
+  // handled server-side via sales injection, so no extra work needed here
 }
 
 // ============================================================
